@@ -72,7 +72,7 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
             <path d={`M0 0H1V1H0Z M${crop.x} ${crop.y}V${crop.y + crop.h}H${crop.x + crop.w}V${crop.y}Z`} fillRule="evenodd" fill="oklch(0 0 0 / 55%)" />
           </svg>
           <div
-            className={cn('mark-outline absolute animate-in rounded-[2px] duration-150 ease-snap fade-in zoom-in-95 [--mark:var(--mark-crop)]', interactive && 'pointer-events-auto cursor-move')}
+            className={cn('mark-outline absolute animate-in rounded-[2px] duration-150 ease-snap fade-in zoom-in-95 [--mark:var(--mark-crop)]', interactive && 'pointer-events-auto', onCropChange && 'cursor-move')}
             style={rectStyle(crop)}
             onPointerDown={(e) => {
               onSelect?.({ kind: 'crop' })
@@ -83,7 +83,7 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
             <MarkLabel className="bg-mark-crop" placement={crop.y < 0.05 ? 'inside' : 'above'}>
               裁剪 <span className="tabular-nums">{Math.round(crop.w * width)}×{Math.round(crop.h * height)}</span>
             </MarkLabel>
-            {(cropSelected || !interactive) && <Handles onDown={interactive ? (e, h) => beginDrag(e, crop, h, cropNormAspect, onCropChange) : undefined} />}
+            {((cropSelected && onCropChange) || !interactive) && <Handles onDown={onCropChange ? (e, h) => beginDrag(e, crop, h, cropNormAspect, onCropChange) : undefined} />}
           </div>
         </>
       )}
@@ -101,7 +101,8 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
                 ? 'mark-outline bg-[repeating-linear-gradient(135deg,color-mix(in_oklch,var(--mark-delogo)_28%,transparent)_0_4px,transparent_4px_8px)]'
                 : 'border-[1.5px] border-dashed border-mark-delogo/70',
               selected && 'z-10',
-              interactive && 'pointer-events-auto cursor-move',
+              interactive && 'pointer-events-auto',
+              apply && 'cursor-move',
             )}
             style={rectStyle(d)}
             onPointerDown={(e) => {
@@ -122,7 +123,7 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
               )}
               {d.origin && <span className="opacity-75">{modelLabel(d.origin)}</span>}
             </MarkLabel>
-            {selected && <Handles onDown={apply ? (e, h) => beginDrag(e, d, h, undefined, apply) : undefined} />}
+            {selected && apply && <Handles onDown={(e, h) => beginDrag(e, d, h, undefined, apply)} />}
           </div>
         )
       })}
@@ -155,7 +156,7 @@ function MarkLabel({ children, className, placement, alignEnd = false }: { child
   return (
     <span
       className={cn(
-        'pointer-events-none absolute flex h-[18px] items-center gap-1 rounded-[3px] px-1.5 text-[11px] font-medium whitespace-nowrap text-mark-ink shadow-[0_0_0_1px_oklch(0_0_0/35%)]',
+        'pointer-events-none absolute flex items-center gap-1 rounded-[3px] px-1.5 py-px text-caption font-medium whitespace-nowrap text-mark-ink shadow-[0_0_0_1px_oklch(0_0_0/35%)]',
         placementClass[placement],
         alignEnd ? 'right-[-1.5px]' : 'left-[-1.5px]',
         placement === 'inside' && (alignEnd ? 'right-1' : 'left-1'),

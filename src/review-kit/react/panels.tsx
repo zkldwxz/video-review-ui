@@ -46,13 +46,14 @@ const ASPECTS: { label: string; value: string }[] = [
 ]
 
 export function CropPanel() {
-  const { edits, media, dispatch, cropAspect, setCropAspect, showThirds, setShowThirds, sameResolution, newCrop, notify, undo, features } = useReviewer()
+  const { edits, media, dispatch, cropAspect, setCropAspect, showThirds, setShowThirds, sameResolution, newCrop, notify, undo, features, readOnly } = useReviewer()
   const thirdsId = useId()
   const crop = edits.crop
   const aspectValue = cropAspect === null ? 'free' : Math.abs(cropAspect - media.width / media.height) < 1e-6 ? 'source' : String(cropAspect)
 
   return (
     <div className="flex flex-col gap-4">
+      {!readOnly && (
       <Field label="画面比例">
         <ToggleGroup
           type="single"
@@ -74,16 +75,21 @@ export function CropPanel() {
           ))}
         </ToggleGroup>
       </Field>
+      )}
+
 
       {crop ? (
         <>
-          <RectFields rect={crop} onChange={(r, key) => dispatch({ type: 'setCrop', crop: r }, key)} />
+          <fieldset disabled={readOnly} className="contents">
+            <RectFields rect={crop} onChange={(r, key) => dispatch({ type: 'setCrop', crop: r }, key)} />
+          </fieldset>
           <div className="flex items-center justify-between">
             <Label htmlFor={thirdsId} className="text-xs font-normal">
               显示三分线
             </Label>
             <Switch id={thirdsId} size="sm" checked={showThirds} onCheckedChange={setShowThirds} />
           </div>
+          {!readOnly && (
           <div className="flex justify-end gap-2">
             {features.batchSync && (
             <Button
@@ -106,7 +112,10 @@ export function CropPanel() {
               <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} />
             </Button>
           </div>
+          )}
         </>
+      ) : readOnly ? (
+        <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">没有裁剪框，导出原始画面。</p>
       ) : (
         <Button variant="outline" onClick={newCrop} className="justify-start">
           <HugeiconsIcon icon={CropIcon} strokeWidth={1.5} data-icon="inline-start" />
@@ -119,7 +128,7 @@ export function CropPanel() {
 }
 
 export function DelogoPanel() {
-  const { edits, media, player, selection, setSelection, dispatch, sameResolution, newDelogo, openImport, notify, undo, features } = useReviewer()
+  const { edits, media, player, selection, setSelection, dispatch, sameResolution, newDelogo, openImport, notify, undo, features, readOnly, delogoMode } = useReviewer()
   const timed = features.delogoTimeRange
   const time = player.state.time
   const fps = media.fps
@@ -128,13 +137,13 @@ export function DelogoPanel() {
     <div className="flex flex-col gap-2">
       {edits.delogos.length === 0 && (
         <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-          还没有 Delogo 区域。按 <Kbd>N</Kbd> 新建{features.modelImport && '，或导入模型识别结果'}。
+          {readOnly ? '没有 Delogo 区域。' : <>还没有 Delogo 区域。按 <Kbd>N</Kbd> 新建{features.modelImport && '，或导入模型识别结果'}。</>}
         </p>
       )}
       {edits.delogos.map((d, i) => {
         const selected = selection?.kind === 'delogo' && selection.id === d.id
         const active = !timed || (time >= d.start && time <= d.end)
-                    const update = (patch: Partial<Omit<DelogoRegion, 'id'>>, key?: string) => dispatch({ type: 'updateDelogo', id: d.id, patch }, key)
+        const update = (patch: Partial<Omit<DelogoRegion, 'id'>>, key?: string) => dispatch({ type: 'updateDelogo', id: d.id, patch }, key)
         return (
           <div key={d.id} className={cn('rounded-lg border transition-colors duration-120 ease-snap', selected ? 'border-mark-delogo-fg/50 bg-mark-delogo/8' : 'hover:bg-muted/60')}>
             <button
@@ -145,7 +154,7 @@ export function DelogoPanel() {
             >
               <span className={cn('size-2 shrink-0 rounded-[2px]', active ? 'bg-mark-delogo' : 'border border-mark-delogo-fg')} />
               <span className="font-medium">Delogo {i + 1}</span>
-              {d.origin && <span className="truncate text-[11px] text-mark-delogo-fg">{modelLabel(d.origin)}</span>}
+              {d.origin && <span className="truncate text-caption text-mark-delogo-fg">{modelLabel(d.origin)}</span>}
               {timed && (
                 <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
                   {formatShort(d.start)}–{formatShort(d.end)}
@@ -154,6 +163,7 @@ export function DelogoPanel() {
             </button>
             {selected && (
               <div className="flex animate-in flex-col gap-3 border-t px-2.5 pt-2.5 pb-3 duration-150 ease-snap fade-in slide-in-from-top-1">
+                <fieldset disabled={readOnly} className="contents">
                 {timed && (
                 <div className="grid grid-cols-2 gap-2">
                   <TimeField
@@ -175,6 +185,7 @@ export function DelogoPanel() {
                 </div>
                 )}
                 <RectFields rect={d} columns={4} onChange={(r, key) => update(r, key)} />
+                {!delogoMode && (
                 <Field label="处理方式">
                   <Select value={d.mode} onValueChange={(v) => update({ mode: v as DelogoMode })}>
                     <SelectTrigger size="sm" className="w-full">
@@ -186,13 +197,16 @@ export function DelogoPanel() {
                     </SelectContent>
                   </Select>
                 </Field>
+                )}
+                </fieldset>
                 {d.origin && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     由 {modelLabel(d.origin)} 预设
                     {d.origin.label && `，类别 ${d.origin.label}`}
                     {d.origin.trackId && `，跟踪 ID ${d.origin.trackId}`}
                   </p>
                 )}
+                {!readOnly && (
                 <div className="flex justify-end gap-2">
                   {timed && (
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => update({ start: 0, end: media.duration })}>
@@ -222,11 +236,13 @@ export function DelogoPanel() {
                     删除
                   </Button>
                 </div>
+                )}
               </div>
             )}
           </div>
         )
       })}
+      {!readOnly && (
       <div className={cn('grid gap-2 pt-1', features.modelImport && 'grid-cols-2')}>
         <Button variant="outline" onClick={newDelogo}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={1.5} data-icon="inline-start" />
@@ -240,16 +256,18 @@ export function DelogoPanel() {
           </Button>
         )}
       </div>
+      )}
     </div>
   )
 }
 
 export function SegmentsPanel({ onMarkIn, onMarkOut, onSplit }: { onMarkIn: () => void; onMarkOut: () => void; onSplit: () => void }) {
-  const { edits, media, selection, setSelection, dispatch, notify, undo } = useReviewer()
+  const { edits, media, selection, setSelection, dispatch, notify, undo, readOnly } = useReviewer()
   const kept = edits.segments.reduce((sum, s) => sum + s.end - s.start, 0)
 
   return (
     <div className="flex flex-col gap-2">
+      {!readOnly && (
       <div className="grid grid-cols-3 gap-2">
         <Button variant="outline" size="sm" onClick={onMarkIn}>
           <HugeiconsIcon icon={MarkInIcon} strokeWidth={1.5} data-icon="inline-start" />
@@ -264,6 +282,7 @@ export function SegmentsPanel({ onMarkIn, onMarkOut, onSplit }: { onMarkIn: () =
           切开 <Kbd className="ml-auto">S</Kbd>
         </Button>
       </div>
+      )}
       {edits.segments.map((s, i) => {
         const selected = selection?.kind === 'segment' && selection.index === i
         return (
@@ -276,12 +295,14 @@ export function SegmentsPanel({ onMarkIn, onMarkOut, onSplit }: { onMarkIn: () =
               {formatTimecode(s.start, media.fps)} – {formatTimecode(s.end, media.fps)}
             </button>
             <span className="text-muted-foreground tabular-nums">{formatShort(s.end - s.start)}</span>
-            <Button variant="ghost" size="icon-sm" aria-label={`删除片段 ${i + 1}`} onClick={() => {
-                dispatch({ type: 'removeSegment', index: i })
-                notify(`已删除片段 ${i + 1}`, { action: { label: '撤销', onClick: undo } })
-              }}>
-              <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} />
-            </Button>
+            {!readOnly && (
+              <Button variant="ghost" size="icon-sm" aria-label={`删除片段 ${i + 1}`} onClick={() => {
+                  dispatch({ type: 'removeSegment', index: i })
+                  notify(`已删除片段 ${i + 1}`, { action: { label: '撤销', onClick: undo } })
+                }}>
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} />
+              </Button>
+            )}
           </div>
         )
       })}

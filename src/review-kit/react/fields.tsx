@@ -43,7 +43,7 @@ export function NumberField({ label, value, min = 0, max, onCommit }: { label: s
   const id = useId()
   return (
     <div className="relative">
-      <Label htmlFor={id} className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-[11px] font-normal text-muted-foreground">
+      <Label htmlFor={id} className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-caption font-normal text-muted-foreground">
         {label}
       </Label>
       <Input
@@ -51,7 +51,7 @@ export function NumberField({ label, value, min = 0, max, onCommit }: { label: s
         id={id}
         defaultValue={value}
         inputMode="numeric"
-        className="h-7 pl-6 text-right tabular-nums"
+        className="pl-6 text-right tabular-nums"
         onKeyDown={(e) => commitKeys(e, () => (e.currentTarget.value = String(value)))}
         onBlur={(e) => {
           const v = Number(e.currentTarget.value)
@@ -75,7 +75,7 @@ export function TimeField({ label, value, fps, icon, onCommit, onUsePlayhead }: 
   const text = formatTimecode(value, fps)
   return (
     <div className="flex flex-col gap-1">
-      <Label htmlFor={id} className="text-[11px] font-normal text-muted-foreground">
+      <Label htmlFor={id} className="text-caption font-normal text-muted-foreground">
         {label}
       </Label>
       <div className="flex">
@@ -84,7 +84,7 @@ export function TimeField({ label, value, fps, icon, onCommit, onUsePlayhead }: 
           id={id}
           defaultValue={text}
           aria-invalid={invalid || undefined}
-          className="h-7 rounded-r-none text-xs tabular-nums"
+          className="rounded-r-none tabular-nums"
           onKeyDown={(e) => commitKeys(e, () => (e.currentTarget.value = text))}
           onBlur={(e) => {
             const t = parseTimecode(e.currentTarget.value, fps)
@@ -96,7 +96,7 @@ export function TimeField({ label, value, fps, icon, onCommit, onUsePlayhead }: 
           <HugeiconsIcon icon={icon} strokeWidth={1.5} />
         </Button>
       </div>
-      {invalid && <span className="text-[11px] text-destructive">格式示例：1:23、83.5、00:01:23:12</span>}
+      {invalid && <span className="text-caption text-destructive">格式示例：1:23、83.5、00:01:23:12</span>}
     </div>
   )
 }
@@ -110,7 +110,7 @@ export function InlineTitle({ value, onCommit, className }: { value: string; onC
         autoFocus
         defaultValue={value}
         aria-label="视频标题"
-        className={cn('h-7 text-sm font-semibold', className)}
+        className={cn('font-semibold', className)}
         onFocus={(e) => e.currentTarget.select()}
         onKeyDown={(e) => commitKeys(e, () => (e.currentTarget.value = value))}
         onBlur={(e) => {

@@ -95,7 +95,7 @@ export function ImportDialog({ open, onOpenChange, media, timeRange = true, onIm
                 ))}
               </SelectContent>
             </Select>
-            <span className="ml-auto text-[11px] text-muted-foreground">填入示例</span>
+            <span className="ml-auto text-caption text-muted-foreground">填入示例</span>
             {samples(media).map((s) => (
               <Button key={s.label} variant="outline" size="xs" onClick={() => setText(s.text)}>
                 {s.label}
@@ -112,19 +112,19 @@ export function ImportDialog({ open, onOpenChange, media, timeRange = true, onIm
             onChange={(e) => setText(e.target.value)}
             spellCheck={false}
             placeholder={'YOLO 标签：0 0.887 0.097 0.106 0.074 0.93\nUltralytics：result.summary() 的数组，或 [{ time, detections }]\nSAM：[{ bbox, segmentation, predicted_iou }] 或 SAM 2 的 [{ frame_idx, obj_id, mask }]'}
-            className="h-44 resize-none font-mono text-[11px] leading-4"
+            className="h-44 resize-none font-mono text-caption leading-4"
           />
 
           <div className={cn('grid gap-3', timeRange && 'grid-cols-2')}>
             <div className="flex flex-col gap-1">
-              <Label htmlFor={ids.score} className="text-[11px] font-normal text-muted-foreground">
+              <Label htmlFor={ids.score} className="text-caption font-normal text-muted-foreground">
                 置信度下限
               </Label>
               <Input id={ids.score} type="number" step={0.05} min={0} max={1} value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="tabular-nums" />
             </div>
             {timeRange && (
             <div className="flex flex-col gap-1">
-              <Label htmlFor={ids.gap} className="text-[11px] font-normal text-muted-foreground">
+              <Label htmlFor={ids.gap} className="text-caption font-normal text-muted-foreground">
                 缺失超过多少秒拆成两段
               </Label>
               <Input id={ids.gap} type="number" step={0.5} min={0} value={maxGap} onChange={(e) => setMaxGap(Number(e.target.value))} className="tabular-nums" />

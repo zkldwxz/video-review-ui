@@ -8,7 +8,7 @@ adapters/  模型输出 → Detection：YOLO 标签文本、Ultralytics JSON、S
 react/     <VideoReviewer> 及其子组件
 ```
 
-React 层依赖项目里的 shadcn/ui 组件（`@/components/ui/*`）和图标（`@/components/icons/review-icons`）。
+React 层直接用宿主项目里的 shadcn/ui 组件（`@/components/ui/*`）和图标（`@/components/icons/review-icons`），不自带风格：宿主用 Mira、Nova 或别的预设，按钮、输入框、下拉的尺寸和样子都跟着宿主走。组件自己用到的颜色、字号和动效见下面「样式与宿主主题」。
 
 ## 最小接入
 
@@ -42,7 +42,61 @@ const videos: ReviewVideo[] = [
 />
 ```
 
-`ref` 可以拿到 `VideoReviewerHandle`：`importRegions(videoId, regions)`、`getEdits(videoId)`、`selectVideo(videoId)`。
+`ref` 可以拿到 `VideoReviewerHandle`：
+- `importRegions(videoId, regions)`：把模型预设的区域加到某条视频（一步，可撤销）
+- `getEdits(videoId)`：原始编辑数据
+- `getTask(videoId?)`：生成和 `onSave` 收到的一样的处理任务（已按功能开关整理），但不触发保存，适合宿主用自己的“提交”按钮。不传 videoId 取当前视频；其他视频按 `ReviewVideo` 声明的宽高和时长换算，没声明时返回 `undefined`
+- `selectVideo(videoId)`
+
+## 样式与宿主主题
+
+在宿主的 Tailwind 入口 CSS 里引入一次：
+
+```css
+@import "tailwindcss";
+/* …宿主自己的 shadcn 主题… */
+@import "./review-kit/styles.css";
+```
+
+`styles.css` 里全是默认值（`:where()` 零优先级和 `@theme default`），宿主在自己的 `:root` / `.dark` / `@theme` 里定义同名变量就会覆盖，和引入顺序无关。它还带了 `@source "./"`，Tailwind 会扫描组件源码。
+
+| 变量 | 默认 | 用途 |
+|---|---|---|
+| `--stage` | 浅 `oklch(0.4 0 0)` / 深 `oklch(0.175 0 0)` | 播放区背景，饱和度应为 0 |
+| `--mark-crop` / `--mark-delogo` / `--mark-segment` | 琥珀 / 鸢尾 / 铜绿 | 画面上的框、时间轴色条 |
+| `--mark-crop-fg` / `--mark-delogo-fg` / `--mark-segment-fg` | 浅色模式加深，深色同原色 | 面板上的标记色文字和图标 |
+| `--mark-ink` | 深墨绿 | 标记色上的文字 |
+| `--playhead` | 信号红 | 播放头 |
+| `--success` | 玉色 | 审核通过（shadcn 默认主题没有这个变量） |
+| `--text-caption` | `0.6875rem`（11px） | 角标、刻度、字段标签 |
+| `--text-micro` | `0.625rem`（10px） | 缩略图时长、队列里的小标签 |
+| `--text-body` | `0.8125rem`（13px） | 队列标题、统计数值 |
+| `--ease-snap` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | 动效缓动 |
+
+默认按高密度审片台设计。放进普通后台（例如 Nova 预设、要求文字不小于 12px）时这样覆盖：
+
+```css
+@theme {
+  --text-caption: 0.75rem;
+  --text-micro: 0.75rem;
+  --text-body: 0.875rem;
+}
+```
+
+深色值挂在 `.dark` 上；宿主的深色模式用别的选择器（例如 `[data-theme=dark]`）时，在那里重新定义上表里的颜色。
+
+## 嵌入、只读、禁用
+
+```tsx
+<VideoReviewer
+  embedded        // 去掉外框和圆角；快捷键只在用户操作这块区域时响应（焦点或最后一次点击在组件内），不抢宿主页面的按键
+  readOnly        // 能播放、切换视频、查看区域和数值；不能修改，不显示保存
+  disabled        // 整个组件不可操作（inert），快捷键停用，例如宿主提交中
+  delogoMode="blur" // 固定 Delogo 处理方式：隐藏“处理方式”选择，所有区域（含模型导入的）都按它导出
+/>
+```
+
+只读和禁用只限制界面上的操作；宿主通过 `ref.importRegions` 写入仍然有效。
 
 ## 功能开关
 

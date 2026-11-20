@@ -25,8 +25,9 @@ type Props = {
   showDelogoTimes?: boolean
   onSeek: (time: number) => void
   onSelect: (s: Selection) => void
-  onDelogoRange: (id: string, range: TimeRange, coalesceKey: string) => void
-  onSegmentRange: (index: number, range: TimeRange, coalesceKey: string) => void
+  /** 不传时色条只能点选，不能拖动（只读） */
+  onDelogoRange?: (id: string, range: TimeRange, coalesceKey: string) => void
+  onSegmentRange?: (index: number, range: TimeRange, coalesceKey: string) => void
   className?: string
 }
 
@@ -63,9 +64,10 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
   }
 
   /** 拖色条：中间平移，两端改开始 / 结束；靠近播放头时吸附 */
-  const dragRange = (e: ReactPointerEvent<HTMLElement>, start: TimeRange, apply: (r: TimeRange, key: string) => void) => {
+  const dragRange = (e: ReactPointerEvent<HTMLElement>, start: TimeRange, apply?: (r: TimeRange, key: string) => void) => {
     if (e.button !== 0) return
     e.stopPropagation()
+    if (!apply) return
     const bar = e.currentTarget
     const mode = ((e.target as HTMLElement).dataset.edge as DragMode | undefined) ?? 'move'
     const laneWidth = lanes.current!.getBoundingClientRect().width
@@ -101,7 +103,7 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
   const span = (r: TimeRange) => ({ left: at(r.start), width: at(r.end - r.start) })
 
   return (
-    <div className={cn('grid grid-cols-[112px_1fr] text-[11px] select-none', className)}>
+    <div className={cn('grid grid-cols-[112px_1fr] text-caption select-none', className)}>
       <div className="border-r">
         <div className="h-5 border-b" />
         {showSegments && <TrackHead icon={ScissorIcon} swatch="bg-mark-segment" label="片段" count={segments.length} />}
@@ -144,10 +146,11 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
               key={`${i}-${s.start}`}
               style={span(s)}
               className="bg-mark-segment"
+              draggable={!!onSegmentRange}
               selected={selection?.kind === 'segment' && selection.index === i}
               onPointerDown={(e) => {
                 onSelect({ kind: 'segment', index: i })
-                dragRange(e, s, (r, key) => onSegmentRange(i, r, key))
+                dragRange(e, s, onSegmentRange && ((r, key) => onSegmentRange(i, r, key)))
               }}
             >
               <span className="truncate">片段 {i + 1}</span>
@@ -170,10 +173,11 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
               <Bar
                 style={span(d)}
                 className="bg-mark-delogo"
+                draggable={!!onDelogoRange}
                 selected={selected}
                 onPointerDown={(e) => {
                   onSelect({ kind: 'delogo', id: d.id })
-                  dragRange(e, d, (r, key) => onDelogoRange(d.id, r, key))
+                  dragRange(e, d, onDelogoRange && ((r, key) => onDelogoRange(d.id, r, key)))
                 }}
               >
                 <span className="truncate tabular-nums">
@@ -219,29 +223,32 @@ function Bar({
   className,
   style,
   selected,
+  draggable,
   onPointerDown,
 }: {
   children: ReactNode
   className?: string
   style: { left: string; width: string }
   selected?: boolean
+  draggable: boolean
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
 }) {
   return (
     <div
       className={cn(
-        'absolute inset-y-1 flex min-w-1 cursor-grab items-center overflow-hidden rounded-[4px] px-2 font-medium text-mark-ink active:cursor-grabbing',
+        'absolute inset-y-1 flex min-w-1 cursor-pointer items-center overflow-hidden rounded-[4px] px-2 font-medium text-mark-ink',
+        draggable && 'cursor-grab active:cursor-grabbing',
         selected && 'ring-2 ring-foreground/70',
         className,
       )}
       style={style}
       onPointerDown={onPointerDown}
     >
-      <span data-edge="start" className="absolute inset-y-0 left-0 flex cursor-ew-resize items-center pl-0.5" style={{ width: EDGE_PX }}>
+      <span data-edge="start" className={cn('absolute inset-y-0 left-0 flex items-center pl-0.5', draggable && 'cursor-ew-resize')} style={{ width: EDGE_PX }}>
         <span className="pointer-events-none h-3 w-0.5 rounded-full bg-mark-ink/40" />
       </span>
       {children}
-      <span data-edge="end" className="absolute inset-y-0 right-0 flex cursor-ew-resize items-center justify-end pr-0.5" style={{ width: EDGE_PX }}>
+      <span data-edge="end" className={cn('absolute inset-y-0 right-0 flex items-center justify-end pr-0.5', draggable && 'cursor-ew-resize')} style={{ width: EDGE_PX }}>
         <span className="pointer-events-none h-3 w-0.5 rounded-full bg-mark-ink/40" />
       </span>
     </div>

@@ -19,7 +19,7 @@ const statItems: { key: keyof VideoStats; label: string; icon: IconSvgElement }[
 ]
 
 export function InfoPanel() {
-  const { video, edits, media, dispatch, tagOptions, features } = useReviewer()
+  const { video, edits, media, dispatch, tagOptions, features, readOnly } = useReviewer()
     const src = features.sourceInfo ? video.source : undefined
   const stats = statItems.filter((s) => src?.stats?.[s.key] !== undefined)
 
@@ -30,7 +30,7 @@ export function InfoPanel() {
           key={edits.title}
           defaultValue={edits.title}
           aria-label="标题"
-          readOnly={!features.rename}
+          readOnly={!features.rename || readOnly}
 
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           onBlur={(e) => {
@@ -39,7 +39,7 @@ export function InfoPanel() {
             else e.currentTarget.value = edits.title
           }}
         />
-        <span className="truncate text-[11px] text-muted-foreground" title={video.fileName}>
+        <span className="truncate text-caption text-muted-foreground" title={video.fileName}>
           原文件 {video.fileName}
         </span>
       </Field>
@@ -48,7 +48,7 @@ export function InfoPanel() {
 
       {features.tags && (
         <Field label="标签">
-          <TagEditor tags={edits.tags} options={tagOptions} onChange={(tags) => dispatch({ type: 'setTags', tags })} />
+          <TagEditor tags={edits.tags} options={tagOptions} readOnly={readOnly} onChange={(tags) => dispatch({ type: 'setTags', tags })} />
         </Field>
       )}
 
@@ -56,11 +56,11 @@ export function InfoPanel() {
         <div className="grid grid-cols-3 gap-1.5">
           {stats.map((s) => (
             <div key={s.key} className="flex flex-col gap-0.5 rounded-md bg-muted/60 px-2 py-1.5">
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1 text-caption text-muted-foreground">
                 <HugeiconsIcon icon={s.icon} size={12} strokeWidth={1.5} />
                 {s.label}
               </span>
-              <span className="text-[13px] font-medium tabular-nums">{formatCount(src!.stats![s.key]!)}</span>
+              <span className="text-body font-medium tabular-nums">{formatCount(src!.stats![s.key]!)}</span>
             </div>
           ))}
         </div>

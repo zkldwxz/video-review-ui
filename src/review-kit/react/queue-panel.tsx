@@ -90,15 +90,15 @@ function QueueItem({ video, edits, active, onSelect }: { video: ReviewVideo; edi
       <span className="relative mt-0.5 flex h-9 w-16 items-center justify-center overflow-hidden rounded-[4px] bg-stage text-white/50">
         {video.poster ? <img src={video.poster} alt="" className="size-full object-cover" loading="lazy" /> : <HugeiconsIcon icon={Video01Icon} size={16} strokeWidth={1.5} />}
         {video.duration !== undefined && (
-          <span className="absolute right-0.5 bottom-0.5 rounded-[3px] bg-black/60 px-1 text-[10px] leading-3.5 text-white tabular-nums">{formatShort(video.duration)}</span>
+          <span className="absolute right-0.5 bottom-0.5 rounded-[3px] bg-black/60 px-1 text-micro text-white tabular-nums">{formatShort(video.duration)}</span>
         )}
       </span>
 
       <span className="min-w-0">
-        <span className="block truncate text-[13px] leading-5" title={edits.title}>
+        <span className="block truncate text-body" title={edits.title}>
           {edits.title}
         </span>
-        <span className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+        <span className="flex items-center gap-2 text-caption text-muted-foreground tabular-nums">
           {author && <span className="truncate">{author}</span>}
           <MarkCount icon={CropIcon} on={edits.crop !== null} className="text-mark-crop-fg" />
           <MarkCount icon={DelogoIcon} on={edits.delogos.length > 0} count={edits.delogos.length} className="text-mark-delogo-fg" />
@@ -107,11 +107,11 @@ function QueueItem({ video, edits, active, onSelect }: { video: ReviewVideo; edi
         {edits.tags.length > 0 && (
           <span className="mt-1 flex gap-1 overflow-hidden">
             {edits.tags.slice(0, 3).map((t) => (
-              <span key={t} className="shrink-0 rounded-sm bg-muted px-1 text-[10px] leading-4 text-muted-foreground">
+              <span key={t} className="shrink-0 rounded-sm bg-muted px-1 text-micro text-muted-foreground">
                 {t}
               </span>
             ))}
-            {edits.tags.length > 3 && <span className="text-[10px] leading-4 text-muted-foreground">+{edits.tags.length - 3}</span>}
+            {edits.tags.length > 3 && <span className="text-micro text-muted-foreground">+{edits.tags.length - 3}</span>}
           </span>
         )}
       </span>
