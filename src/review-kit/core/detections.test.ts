@@ -29,6 +29,11 @@ describe('detectionsToRegions', () => {
     ])
   })
 
+  it('maxGap 为 Infinity 时同一目标不拆段（Delogo 不分时间段时用）', () => {
+    const dets: Detection[] = [0, 1, 2, 3, 10, 11].map((time) => ({ time, box, label: 'logo' }))
+    expect(detectionsToRegions(dets, { model: 'yolo', duration: 30, padding: 0, maxGap: Infinity })).toHaveLength(1)
+  })
+
   it('稀疏采样（每 4 秒一帧）不会被当成中断', () => {
     const dets: Detection[] = [0, 4, 8, 12].map((time) => ({ time, box, label: 'logo' }))
     const regions = detectionsToRegions(dets, { model: 'yolo', duration: 30, maxGap: 1 })

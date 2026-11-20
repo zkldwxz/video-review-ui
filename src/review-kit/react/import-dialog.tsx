@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import { formatLabels, parseDetections, type DetectionFormat } from '../adapters/parse'
 import { detectionsToRegions } from '../core/detections'
 import { formatShort } from '../core/timecode'
@@ -42,9 +43,16 @@ function samples(m: MediaInfo): { label: string; format: DetectionFormat; text: 
   ]
 }
 
-type Props = { open: boolean; onOpenChange: (v: boolean) => void; media: MediaInfo; onImport: (regions: DelogoRegion[]) => void }
+type Props = {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  media: MediaInfo
+  /** false 时 Delogo 不分时间段：同一目标不拆段，列表不显示时间 */
+  timeRange?: boolean
+  onImport: (regions: DelogoRegion[]) => void
+}
 
-export function ImportDialog({ open, onOpenChange, media, onImport }: Props) {
+export function ImportDialog({ open, onOpenChange, media, timeRange = true, onImport }: Props) {
   const ids = { text: useId(), score: useId(), gap: useId() }
   const [text, setText] = useState('')
   const [format, setFormat] = useState<DetectionFormat | 'auto'>('auto')
@@ -55,12 +63,12 @@ export function ImportDialog({ open, onOpenChange, media, onImport }: Props) {
     if (!text.trim()) return null
     try {
       const parsed = parseDetections(text, media, format === 'auto' ? undefined : format)
-      const regions = detectionsToRegions(parsed.detections, { model: MODEL_OF[parsed.format], duration: media.duration, minScore, maxGap })
+      const regions = detectionsToRegions(parsed.detections, { model: MODEL_OF[parsed.format], duration: media.duration, minScore, maxGap: timeRange ? maxGap : Infinity })
       return { ok: true as const, ...parsed, regions }
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
     }
-  }, [text, format, media, minScore, maxGap])
+  }, [text, format, media, minScore, maxGap, timeRange])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,19 +115,21 @@ export function ImportDialog({ open, onOpenChange, media, onImport }: Props) {
             className="h-44 resize-none font-mono text-[11px] leading-4"
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn('grid gap-3', timeRange && 'grid-cols-2')}>
             <div className="flex flex-col gap-1">
               <Label htmlFor={ids.score} className="text-[11px] font-normal text-muted-foreground">
                 置信度下限
               </Label>
               <Input id={ids.score} type="number" step={0.05} min={0} max={1} value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="tabular-nums" />
             </div>
+            {timeRange && (
             <div className="flex flex-col gap-1">
               <Label htmlFor={ids.gap} className="text-[11px] font-normal text-muted-foreground">
                 缺失超过多少秒拆成两段
               </Label>
               <Input id={ids.gap} type="number" step={0.5} min={0} value={maxGap} onChange={(e) => setMaxGap(Number(e.target.value))} className="tabular-nums" />
-            </div>
+             </div>
+             )}
           </div>
 
           {result && !result.ok && <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{result.error}</p>}
@@ -134,9 +144,11 @@ export function ImportDialog({ open, onOpenChange, media, onImport }: Props) {
                     <span className="size-2 rounded-[2px] bg-mark-delogo" />
                     {r.origin && modelLabel(r.origin)}
                     {r.origin?.label && <span className="text-muted-foreground">{r.origin.label}</span>}
-                    <span className="ml-auto text-muted-foreground">
-                      {formatShort(r.start)}–{formatShort(r.end)}
-                    </span>
+                    {timeRange && (
+                      <span className="ml-auto text-muted-foreground">
+                        {formatShort(r.start)}–{formatShort(r.end)}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

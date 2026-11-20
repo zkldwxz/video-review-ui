@@ -26,8 +26,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DelogoIcon, MarkInIcon, MarkOutIcon, SplitAtPlayheadIcon } from '@/components/icons/review-icons'
 import { cn } from '@/lib/utils'
+import { applyFeatures, isActionEnabled, resolveFeatures, type ReviewFeatures } from '../core/features'
 import { createId } from '../core/id'
-import { defaultKeymap, type Keymap } from '../core/shortcuts'
+import { defaultKeymap, type Keymap, type ShortcutAction } from '../core/shortcuts'
 import { buildTask, type ReviewTask } from '../core/task'
 import { DEFAULT_TITLE_PROMPT, type TitleGenerator } from '../core/title-prompt'
 import { describeChange } from '../core/describe'
@@ -74,6 +75,8 @@ export type VideoReviewerProps = {
   generateTitles?: TitleGenerator
   /** 提示词模板，可用 {category} {title} {author} {platform} {project} {tags}；引用的变量缺失时输入框留空。默认“生成一个{category}的视频标题” */
   titlePromptTemplate?: string
+  /** 功能开关，只写要改的项，例如 { segments: false }；也可传 featurePresets.delogoOnly。默认值见 core/features.ts */
+  features?: Partial<ReviewFeatures>
   ref?: Ref<VideoReviewerHandle>
   className?: string
 }
@@ -111,12 +114,13 @@ function ReviewerBody({
   onActiveVideoChange,
   generateTitles,
   titlePromptTemplate = DEFAULT_TITLE_PROMPT,
+  features,
   ref,
   className,
 }: VideoReviewerProps) {
   const st = useReviewerState(videos, { initialVideoId, onChange })
   const video = videos.find((v) => v.id === st.activeId) ?? videos[0]
-  const edits = st.editsOf(video.id) ?? video.edits
+  const rawEdits = st.editsOf(video.id) ?? video.edits
   const player = usePlayer(video.id)
   const ps = player.state
 
@@ -126,6 +130,11 @@ function ReviewerBody({
     duration: ps.duration || video.duration || 0,
     fps: video.fps ?? 25,
   }
+  const f = resolveFeatures(features)
+  // 界面和保存都用按开关整理过的内容：关掉的功能不显示也不导出
+  const edits = applyFeatures(rawEdits, f, media.duration)
+  const aiTitle = !!generateTitles && f.rename
+  const enabled = (a: ShortcutAction) => isActionEnabled(a, f, { aiTitle })
 
   const [keymap, setKeymapState] = useState<Keymap>(initialKeymap ?? defaultKeymap)
   const setKeymap = (k: Keymap) => {
@@ -142,7 +151,7 @@ function ReviewerBody({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const { toasts, notify, dismiss, expireActions } = useToasts()
-  useEffect(() => expireActions(), [edits, video.id, expireActions])
+  useEffect(() => expireActions(), [rawEdits, video.id, expireActions])
   const aiTitleInput = useRef<HTMLInputElement>(null)
 
   /** 切到信息页并聚焦 AI 标题输入框：先同步渲染出页签内容，再聚焦 */
@@ -167,7 +176,7 @@ function ReviewerBody({
 
   const queue = useMemo(() => filterQueue(videos, st.editsOf, query, filter), [videos, st.editsOf, query, filter])
   const doneCount = videos.filter((v) => ['approved', 'rejected'].includes((st.editsOf(v.id) ?? v.edits).status)).length
-  const sameResolution = videos.filter((v) => v.id !== video.id && v.width === media.width && v.height === media.height)
+  const sameResolution = f.batchSync ? videos.filter((v) => v.id !== video.id && v.width === media.width && v.height === media.height) : []
 
   const selectVideo = (id: string) => {
     if (id === video.id) return
@@ -198,7 +207,7 @@ function ReviewerBody({
 
   const mark = (edge: 'start' | 'end') => {
     const t = now()
-    if (selection?.kind === 'delogo') {
+    if (selection?.kind === 'delogo' && f.delogoTimeRange) {
       const d = edits.delogos.find((x) => x.id === selection.id)!
       const patch = edge === 'start' ? { start: Math.min(t, d.end - MIN_RANGE) } : { end: Math.max(t, d.start + MIN_RANGE) }
       dispatch({ type: 'updateDelogo', id: d.id, patch })
@@ -211,6 +220,7 @@ function ReviewerBody({
       select({ kind: 'segment', index: indexAfter(edits.segments, seg, selection.index) })
       return
     }
+    if (!f.segments) return notify('先选中一个 Delogo 区域，再设开始 / 结束')
     // 没选中时新建片段：入点到结尾，或开头到出点
     const seg = edge === 'start' ? { start: t, end: media.duration } : { start: 0, end: t }
     if (seg.end - seg.start < MIN_RANGE) return
@@ -261,7 +271,7 @@ function ReviewerBody({
 
   const save = async () => {
     if (saving) return
-    if (edits.status === 'rejected' && !edits.note.trim()) {
+    if (f.decision && edits.status === 'rejected' && !edits.note.trim()) {
       setSaveError('驳回需要填写备注')
       notify('驳回需要填写备注', { tone: 'error' })
       return
@@ -298,8 +308,11 @@ function ReviewerBody({
     player.seek(now() + dir / media.fps)
   }
 
+  // 关掉的功能不占用按键，按下去交给浏览器
+  const activeKeymap = Object.fromEntries(Object.entries(keymap).map(([a, combos]) => [a, enabled(a as ShortcutAction) ? combos : []])) as Keymap
+
   useShortcuts({
-    keymap,
+    keymap: activeKeymap,
     enabled: !importOpen && !keysOpen,
     onEscape: () => st.setSelection(null),
     handlers: {
@@ -320,7 +333,7 @@ function ReviewerBody({
       undo,
       redo,
       save: () => void save(),
-      ...(generateTitles && { aiTitle: focusAiTitle }),
+      aiTitle: focusAiTitle,
     },
     holds: {
       seekForward: { onTap: () => player.seek(now() + SEEK_STEP), onHoldStart: player.startFastForward, onHoldEnd: player.stopFastForward },
@@ -347,7 +360,8 @@ function ReviewerBody({
     notify,
     undo: st.undo,
     keymap,
-    generateTitles,
+    features: f,
+    generateTitles: aiTitle ? generateTitles : undefined,
     titlePromptTemplate,
     aiTitleInput,
   }
@@ -357,12 +371,16 @@ function ReviewerBody({
 
   return (
     <ReviewerContext value={ctx}>
-      <div className={cn('grid min-h-0 grid-cols-[280px_minmax(0,1fr)_340px] overflow-hidden rounded-xl border bg-card', className)}>
+      <div className={cn('grid min-h-0 overflow-hidden rounded-xl border bg-card', f.queue ? 'grid-cols-[280px_minmax(0,1fr)_340px]' : 'grid-cols-[minmax(0,1fr)_340px]', className)}>
+        {f.queue && (
         <QueuePanel
           videos={queue}
           total={videos.length}
           doneCount={doneCount}
-          editsOf={st.editsOf}
+          editsOf={(id) => {
+            const e = st.editsOf(id)
+            return e && applyFeatures(e, f, videos.find((v) => v.id === id)?.duration ?? 0)
+          }}
           activeId={video.id}
           onSelect={selectVideo}
           query={query}
@@ -370,11 +388,17 @@ function ReviewerBody({
           filter={filter}
           onFilterChange={setFilter}
         />
+        )}
 
         <section className="flex min-h-0 min-w-0 flex-col">
           <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3">
             <div className="flex min-w-0 flex-col">
-              <InlineTitle value={edits.title} onCommit={(title) => dispatch({ type: 'rename', title })} />
+              {f.rename ? (
+                <InlineTitle value={edits.title} onCommit={(title) => dispatch({ type: 'rename', title })} />
+              ) : (
+                <span className="truncate text-sm font-semibold">{edits.title}</span>
+              )}
+              {f.sourceInfo && (
               <div className="flex min-w-0 gap-3 truncate text-[11px] text-muted-foreground">
                 {src?.platform && <span>{src.platform}</span>}
                 {src?.author && <span>{src.author}</span>}
@@ -382,9 +406,10 @@ function ReviewerBody({
                 {src?.project && <span>{src.project}</span>}
                 {src?.category && <span>{src.category}</span>}
               </div>
+              )}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              {generateTitles && <IconAction icon={AiMagicIcon} label="AI 改写标题" combo={keymap.aiTitle[0]} onClick={focusAiTitle} />}
+              {aiTitle && <IconAction icon={AiMagicIcon} label="AI 改写标题" combo={keymap.aiTitle[0]} onClick={focusAiTitle} />}
               <IconAction icon={Undo02Icon} label="撤销" combo={keymap.undo[0]} onClick={undo} disabled={!st.canUndo} />
               <IconAction icon={Redo02Icon} label="重做" combo={keymap.redo[0]} onClick={redo} disabled={!st.canRedo} />
               <IconAction icon={KeyboardIcon} label="快捷键设置" onClick={() => setKeysOpen(true)} />
@@ -402,6 +427,7 @@ function ReviewerBody({
                 selection={selection}
                 showThirds={showThirds}
                 cropAspect={cropAspect}
+                showTimes={f.delogoTimeRange}
                 onSelect={select}
                 onCropChange={(crop, key) => dispatch({ type: 'setCrop', crop }, key)}
                 onDelogoChange={(id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
@@ -420,12 +446,16 @@ function ReviewerBody({
               <span className="text-xl leading-none font-medium">{formatTimecode(ps.time, media.fps)}</span>
               <span className="text-xs text-muted-foreground">/ {formatTimecode(media.duration, media.fps)}</span>
             </div>
-            <Separator orientation="vertical" className="mx-2 h-5!" />
-            <IconAction icon={MarkInIcon} label="设为入点" combo={keymap.markIn[0]} onClick={() => mark('start')} />
-            <IconAction icon={MarkOutIcon} label="设为出点" combo={keymap.markOut[0]} onClick={() => mark('end')} />
-            <IconAction icon={SplitAtPlayheadIcon} label="在播放头处切开" combo={keymap.split[0]} onClick={split} />
-            <IconAction icon={DelogoIcon} label="新建 Delogo 区域" combo={keymap.newDelogo[0]} onClick={newDelogo} />
-            <IconAction icon={AiScanIcon} label="导入模型结果" onClick={() => setImportOpen(true)} />
+            {(enabled('markIn') || f.delogo) && <Separator orientation="vertical" className="mx-2 h-5!" />}
+            {enabled('markIn') && (
+              <>
+                <IconAction icon={MarkInIcon} label={f.segments ? '设为入点' : '设为 Delogo 开始'} combo={keymap.markIn[0]} onClick={() => mark('start')} />
+                <IconAction icon={MarkOutIcon} label={f.segments ? '设为出点' : '设为 Delogo 结束'} combo={keymap.markOut[0]} onClick={() => mark('end')} />
+              </>
+            )}
+            {f.segments && <IconAction icon={SplitAtPlayheadIcon} label="在播放头处切开" combo={keymap.split[0]} onClick={split} />}
+            {f.delogo && <IconAction icon={DelogoIcon} label="新建 Delogo 区域" combo={keymap.newDelogo[0]} onClick={newDelogo} />}
+            {f.modelImport && <IconAction icon={AiScanIcon} label="导入模型结果" onClick={() => setImportOpen(true)} />}
             <div className="ml-auto flex items-center gap-1">
               <SpeedMenu rate={ps.rate} onChange={player.setRate} combos={[keymap.speedDown[0], keymap.speedUp[0]]} />
             </div>
@@ -439,6 +469,8 @@ function ReviewerBody({
               segments={edits.segments}
               delogos={edits.delogos}
               selection={selection}
+              showSegments={f.segments}
+              showDelogoTimes={f.delogoTimeRange}
               onSeek={player.seek}
               onSelect={select}
               onDelogoRange={(id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
@@ -453,9 +485,9 @@ function ReviewerBody({
             <div className="px-3 pt-3">
               <TabsList className="w-full">
                 <TabTrigger value="info" icon={InformationCircleIcon} label="信息" />
-                <TabTrigger value="crop" icon={CropIcon} label="裁剪" />
-                <TabTrigger value="delogo" icon={DelogoIcon} label="Delogo" count={edits.delogos.length} />
-                <TabTrigger value="segments" icon={SplitAtPlayheadIcon} label="片段" count={edits.segments.length} />
+                {f.crop && <TabTrigger value="crop" icon={CropIcon} label="裁剪" />}
+                {f.delogo && <TabTrigger value="delogo" icon={DelogoIcon} label="Delogo" count={edits.delogos.length} />}
+                {f.segments && <TabTrigger value="segments" icon={SplitAtPlayheadIcon} label="片段" count={edits.segments.length} />}
               </TabsList>
             </div>
             <TabsContent value="info" className="min-h-0 overflow-y-auto p-3">
@@ -482,6 +514,7 @@ function ReviewerBody({
             savedAt={savedAt}
             error={saveError}
             saveCombo={keymap.save[0]}
+            showDecision={f.decision}
           />
         </aside>
       </div>
@@ -490,13 +523,14 @@ function ReviewerBody({
         open={importOpen}
         onOpenChange={setImportOpen}
         media={media}
+        timeRange={f.delogoTimeRange}
         onImport={(regions) => {
           dispatch({ type: 'addDelogos', regions })
           notify(`已导入 ${regions.length} 个区域`, { action: { label: '撤销', onClick: st.undo } })
           if (regions[0]) select({ kind: 'delogo', id: regions[0].id })
         }}
       />
-      <ShortcutSettings open={keysOpen} onOpenChange={setKeysOpen} keymap={keymap} onChange={setKeymap} />
+      <ShortcutSettings open={keysOpen} onOpenChange={setKeysOpen} keymap={keymap} onChange={setKeymap} isEnabled={enabled} />
     </ReviewerContext>
   )
 }
@@ -559,6 +593,7 @@ function Decision({
   savedAt,
   error,
   saveCombo,
+  showDecision,
 }: {
   edits: ReviewEdits
   onDecision: (status: ReviewEdits['status'], note?: string) => void
@@ -567,12 +602,13 @@ function Decision({
   savedAt?: number
   error: string | null
   saveCombo?: string
+  showDecision: boolean
 }) {
-  const noteRequired = edits.status === 'rejected' && !edits.note.trim()
+  const noteRequired = showDecision && edits.status === 'rejected' && !edits.note.trim()
   return (
     <div className="flex flex-col gap-2.5 p-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold">审核结论</h3>
+        <h3 className="text-sm font-semibold">{showDecision ? '审核结论' : '保存任务'}</h3>
         {savedAt && !error && (
           <span key={savedAt} className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
             <HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} strokeWidth={1.75} className="animate-saved-pop text-success" />
@@ -580,6 +616,8 @@ function Decision({
           </span>
         )}
       </div>
+      {showDecision && (
+      <>
       <ToggleGroup
         type="single"
         value={edits.status === 'approved' || edits.status === 'rejected' ? edits.status : ''}
@@ -608,6 +646,8 @@ function Decision({
         aria-invalid={noteRequired || undefined}
         className="min-h-14 resize-none text-xs"
       />
+      </>
+      )}
       {error && <p className="text-[11px] text-destructive">保存失败：{error}</p>}
       <Button onClick={onSave} disabled={saving || noteRequired} {...keepFocus}>
         {saving ? '保存中…' : '保存'}

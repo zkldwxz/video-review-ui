@@ -44,6 +44,40 @@ const videos: ReviewVideo[] = [
 
 `ref` 可以拿到 `VideoReviewerHandle`：`importRegions(videoId, regions)`、`getEdits(videoId)`、`selectVideo(videoId)`。
 
+## 功能开关
+
+用不到的功能可以关掉。关掉的功能会同时去掉界面、快捷键（快捷键设置里也不再列出），以及 `onSave` 任务里对应的数据。三种调整方式：
+
+```tsx
+import { featurePresets } from '@/review-kit'
+
+// 1. 只写要改的项，其余用默认值
+<VideoReviewer features={{ segments: false }} />
+
+// 2. 用预设
+<VideoReviewer features={featurePresets.delogoOnly} />   // 只做 Delogo，不要裁剪和片段
+<VideoReviewer features={featurePresets.delogoStatic} /> // 只做 Delogo，每个区域整段生效
+<VideoReviewer features={featurePresets.trimOnly} />     // 只剪片段
+
+// 3. 直接改 core/features.ts 里的 defaultFeatures：所有没传 features 的地方都跟着变
+```
+
+| 开关 | 关掉后 |
+|---|---|
+| `queue` | 隐藏左侧视频队列，↑ / ↓ 切换失效 |
+| `rename` | 标题只读，AI 改写标题也关掉 |
+| `tags` | 隐藏标签 |
+| `sourceInfo` | 隐藏平台、作者、视频 ID、数据统计和自定义字段 |
+| `crop` | 隐藏裁剪页签和裁剪框，任务里 `crop` 为 `null` |
+| `delogo` | 隐藏 Delogo，任务里 `delogos` 为空；连带关掉下面两项 |
+| `delogoTimeRange` | Delogo 不分时间段：框始终生效，不显示时间输入和时间轴轨道，导入模型结果时同一目标不拆段，任务里每个区域都是 `0` 到时长 |
+| `modelImport` | 隐藏“导入模型结果”（`ref.importRegions` 仍可用） |
+| `segments` | 隐藏片段页签、时间轴片段轨道和“切开”，任务里 `segments` 为空（导出整段）；I / O 只用来设选中 Delogo 的开始 / 结束 |
+| `batchSync` | 隐藏“同步到同分辨率视频” |
+| `decision` | 隐藏通过 / 驳回和备注，只保留“保存” |
+
+切换开关不会删除已有数据：重新打开后，之前的裁剪框、片段和时间段都还在。关掉时只是不显示、不导出。
+
 ## AI 改写标题
 
 传 `generateTitles` 才会显示（信息页标题下方，以及画面上方标题旁的按钮，快捷键 T）。组件只负责交互，模型调用放在宿主后端，API Key 不进浏览器：

@@ -19,9 +19,17 @@ export function ComboKbd({ combo }: { combo: string }) {
   )
 }
 
-type Props = { open: boolean; onOpenChange: (v: boolean) => void; keymap: Keymap; onChange: (k: Keymap) => void }
+type Props = {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  keymap: Keymap
+  onChange: (k: Keymap) => void
+  /** 关掉的功能不在列表里显示 */
+  isEnabled?: (a: ShortcutAction) => boolean
+}
 
-export function ShortcutSettings({ open, onOpenChange, keymap, onChange }: Props) {
+export function ShortcutSettings({ open, onOpenChange, keymap, onChange, isEnabled = () => true }: Props) {
+  const groups = shortcutGroups.map((g) => ({ ...g, actions: g.actions.filter((a) => isEnabled(a.action)) })).filter((g) => g.actions.length > 0)
   const [recording, setRecording] = useState<ShortcutAction | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -70,7 +78,7 @@ export function ShortcutSettings({ open, onOpenChange, keymap, onChange }: Props
 
         <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
           <div className="flex flex-col gap-5">
-            {shortcutGroups.map((g) => (
+            {groups.map((g) => (
               <section key={g.title}>
                 <h3 className="mb-1 text-xs text-muted-foreground">{g.title}</h3>
                 <div className="flex flex-col divide-y">
