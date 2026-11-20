@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { RefObject } from 'react'
 import type { EditAction } from '../core/edits'
+import type { ReviewFeatures } from '../core/features'
 import type { Keymap } from '../core/shortcuts'
 import type { TitleGenerator } from '../core/title-prompt'
 import type { MediaInfo, ReviewEdits, ReviewVideo } from '../core/types'
@@ -31,6 +32,9 @@ export type ReviewerContextValue = {
   /** 撤销当前视频的上一步（给提示里的“撤销”按钮用） */
   undo: () => void
   keymap: Keymap
+  /** 已合并默认值的功能开关 */
+  features: ReviewFeatures
+  /** 关掉改标题时为 undefined */
   generateTitles?: TitleGenerator
   titlePromptTemplate: string
   /** AI 改写标题的输入框，快捷键聚焦用 */

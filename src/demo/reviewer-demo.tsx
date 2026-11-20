@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { defaultKeymap, VideoReviewer, type Keymap, type ReviewTask, type ReviewVideo, type TitleGenerator, type VideoReviewerHandle } from '@/review-kit'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import {
+  defaultKeymap,
+  featureLabels,
+  featurePresets,
+  resolveFeatures,
+  VideoReviewer,
+  type Keymap,
+  type ReviewFeatures,
+  type ReviewTask,
+  type ReviewVideo,
+  type TitleGenerator,
+  type VideoReviewerHandle,
+} from '@/review-kit'
 import { loadBilibiliVideo } from './bilibili'
 import { demoVideos, tagOptions } from './sample-data'
 
@@ -33,6 +47,39 @@ const generateTitles: TitleGenerator = async ({ prompt, video, edits }, signal) 
   return json.titles
 }
 
+const PRESET_LABELS: Record<keyof typeof featurePresets, string> = { full: '全部功能', delogoOnly: '只做 Delogo', delogoStatic: 'Delogo 整段生效', trimOnly: '只剪片段' }
+
+/** 演示用的功能开关；接入时直接传 features={{ ... }} 或改 core/features.ts 的默认值 */
+function FeatureToggles({ value, onChange }: { value: ReviewFeatures; onChange: (f: ReviewFeatures) => void }) {
+  const id = useId()
+  const resolved = resolveFeatures(value)
+  return (
+    <details className="rounded-lg border bg-card text-xs">
+      <summary className="cursor-pointer px-3 py-2 text-muted-foreground select-none">功能开关</summary>
+      <div className="flex flex-col gap-2 border-t px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-muted-foreground">预设</span>
+          {(Object.keys(featurePresets) as (keyof typeof featurePresets)[]).map((k) => (
+            <Button key={k} size="xs" variant="outline" onClick={() => onChange(featurePresets[k])}>
+              {PRESET_LABELS[k]}
+            </Button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {(Object.keys(featureLabels) as (keyof ReviewFeatures)[]).map((k) => (
+            <div key={k} className="flex items-center gap-1.5">
+              <Switch id={`${id}-${k}`} size="sm" checked={resolved[k]} disabled={resolved[k] !== value[k]} onCheckedChange={(v) => onChange({ ...value, [k]: v })} />
+              <Label htmlFor={`${id}-${k}`} className="text-xs font-normal">
+                {featureLabels[k]}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  )
+}
+
 type BiliState = { kind: 'loading'; bvid: string } | { kind: 'ok'; video: ReviewVideo } | { kind: 'error'; message: string }
 
 /** 宿主接入示例：传入视频列表，保存时拿到处理任务；另外现查一条 B 站视频加进队列 */
@@ -44,6 +91,8 @@ export function ReviewerDemo() {
   const [initialKeymap] = useState(loadKeymap)
   const [bvid, setBvid] = useState(DEFAULT_BVID)
   const [bili, setBili] = useState<BiliState>({ kind: 'loading', bvid: DEFAULT_BVID })
+  const [features, setFeatures] = useState<ReviewFeatures>(featurePresets.full)
+
 
   const onLoaded = (video: ReviewVideo) => {
     setVideos((list) => [video, ...list.filter((v) => v.id !== video.id)])
@@ -83,8 +132,11 @@ export function ReviewerDemo() {
         {bili.kind === 'error' && <span className="min-w-0 flex-1 text-destructive">{bili.message}</span>}
       </form>
 
+      <FeatureToggles value={features} onChange={setFeatures} />
+
       <VideoReviewer
         ref={reviewer}
+        features={features}
         videos={videos}
         tagOptions={tagOptions}
         generateTitles={generateTitles}

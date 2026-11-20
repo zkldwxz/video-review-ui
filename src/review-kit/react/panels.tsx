@@ -46,7 +46,7 @@ const ASPECTS: { label: string; value: string }[] = [
 ]
 
 export function CropPanel() {
-  const { edits, media, dispatch, cropAspect, setCropAspect, showThirds, setShowThirds, sameResolution, newCrop, notify, undo } = useReviewer()
+  const { edits, media, dispatch, cropAspect, setCropAspect, showThirds, setShowThirds, sameResolution, newCrop, notify, undo, features } = useReviewer()
   const thirdsId = useId()
   const crop = edits.crop
   const aspectValue = cropAspect === null ? 'free' : Math.abs(cropAspect - media.width / media.height) < 1e-6 ? 'source' : String(cropAspect)
@@ -84,7 +84,8 @@ export function CropPanel() {
             </Label>
             <Switch id={thirdsId} size="sm" checked={showThirds} onCheckedChange={setShowThirds} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-2">
+            {features.batchSync && (
             <Button
               variant="outline"
               className="flex-1 justify-start"
@@ -97,6 +98,7 @@ export function CropPanel() {
               <HugeiconsIcon icon={ApplyToBatchIcon} strokeWidth={1.5} data-icon="inline-start" />
               同步到 {sameResolution.length} 个同分辨率视频
             </Button>
+            )}
             <Button variant="destructive" size="icon" aria-label="删除裁剪框" onClick={() => {
                 dispatch({ type: 'setCrop', crop: null })
                 notify('已删除裁剪框', { action: { label: '撤销', onClick: undo } })
@@ -117,7 +119,8 @@ export function CropPanel() {
 }
 
 export function DelogoPanel() {
-  const { edits, media, player, selection, setSelection, dispatch, sameResolution, newDelogo, openImport, notify, undo } = useReviewer()
+  const { edits, media, player, selection, setSelection, dispatch, sameResolution, newDelogo, openImport, notify, undo, features } = useReviewer()
+  const timed = features.delogoTimeRange
   const time = player.state.time
   const fps = media.fps
 
@@ -125,13 +128,13 @@ export function DelogoPanel() {
     <div className="flex flex-col gap-2">
       {edits.delogos.length === 0 && (
         <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-          还没有 Delogo 区域。按 <Kbd>N</Kbd> 新建，或导入模型识别结果。
+          还没有 Delogo 区域。按 <Kbd>N</Kbd> 新建{features.modelImport && '，或导入模型识别结果'}。
         </p>
       )}
       {edits.delogos.map((d, i) => {
         const selected = selection?.kind === 'delogo' && selection.id === d.id
-        const active = time >= d.start && time <= d.end
-        const update = (patch: Partial<Omit<DelogoRegion, 'id'>>, key?: string) => dispatch({ type: 'updateDelogo', id: d.id, patch }, key)
+        const active = !timed || (time >= d.start && time <= d.end)
+                    const update = (patch: Partial<Omit<DelogoRegion, 'id'>>, key?: string) => dispatch({ type: 'updateDelogo', id: d.id, patch }, key)
         return (
           <div key={d.id} className={cn('rounded-lg border transition-colors duration-120 ease-snap', selected ? 'border-mark-delogo-fg/50 bg-mark-delogo/8' : 'hover:bg-muted/60')}>
             <button
@@ -143,12 +146,15 @@ export function DelogoPanel() {
               <span className={cn('size-2 shrink-0 rounded-[2px]', active ? 'bg-mark-delogo' : 'border border-mark-delogo-fg')} />
               <span className="font-medium">Delogo {i + 1}</span>
               {d.origin && <span className="truncate text-[11px] text-mark-delogo-fg">{modelLabel(d.origin)}</span>}
-              <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
-                {formatShort(d.start)}–{formatShort(d.end)}
-              </span>
+              {timed && (
+                <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+                  {formatShort(d.start)}–{formatShort(d.end)}
+                </span>
+              )}
             </button>
             {selected && (
               <div className="flex animate-in flex-col gap-3 border-t px-2.5 pt-2.5 pb-3 duration-150 ease-snap fade-in slide-in-from-top-1">
+                {timed && (
                 <div className="grid grid-cols-2 gap-2">
                   <TimeField
                     label="开始"
@@ -167,6 +173,7 @@ export function DelogoPanel() {
                     onUsePlayhead={() => update({ end: Math.max(time, d.start + MIN_RANGE) })}
                   />
                 </div>
+                )}
                 <RectFields rect={d} columns={4} onChange={(r, key) => update(r, key)} />
                 <Field label="处理方式">
                   <Select value={d.mode} onValueChange={(v) => update({ mode: v as DelogoMode })}>
@@ -186,10 +193,13 @@ export function DelogoPanel() {
                     {d.origin.trackId && `，跟踪 ID ${d.origin.trackId}`}
                   </p>
                 )}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => update({ start: 0, end: media.duration })}>
-                    整段生效
-                  </Button>
+                <div className="flex justify-end gap-2">
+                  {timed && (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => update({ start: 0, end: media.duration })}>
+                      整段生效
+                    </Button>
+                  )}
+                  {features.batchSync && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -203,6 +213,7 @@ export function DelogoPanel() {
                     <HugeiconsIcon icon={ApplyToBatchIcon} strokeWidth={1.5} data-icon="inline-start" />
                     同步 {sameResolution.length}
                   </Button>
+                  )}
                   <Button variant="destructive" size="sm" onClick={() => {
                       dispatch({ type: 'removeDelogo', id: d.id })
                       notify(`已删除 Delogo ${i + 1}`, { action: { label: '撤销', onClick: undo } })
@@ -216,16 +227,18 @@ export function DelogoPanel() {
           </div>
         )
       })}
-      <div className="grid grid-cols-2 gap-2 pt-1">
+      <div className={cn('grid gap-2 pt-1', features.modelImport && 'grid-cols-2')}>
         <Button variant="outline" onClick={newDelogo}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={1.5} data-icon="inline-start" />
           新建区域
           <Kbd className="ml-auto">N</Kbd>
         </Button>
-        <Button variant="outline" onClick={openImport}>
-          <HugeiconsIcon icon={AiScanIcon} strokeWidth={1.5} data-icon="inline-start" />
-          导入模型结果
-        </Button>
+        {features.modelImport && (
+          <Button variant="outline" onClick={openImport}>
+            <HugeiconsIcon icon={AiScanIcon} strokeWidth={1.5} data-icon="inline-start" />
+            导入模型结果
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -19,6 +19,10 @@ type Props = {
   segments: TimeRange[]
   delogos: DelogoRegion[]
   selection: Selection
+  /** 片段轨道，关掉片段剪切时隐藏 */
+  showSegments?: boolean
+  /** Delogo 轨道，Delogo 不分时间段时隐藏 */
+  showDelogoTimes?: boolean
   onSeek: (time: number) => void
   onSelect: (s: Selection) => void
   onDelogoRange: (id: string, range: TimeRange, coalesceKey: string) => void
@@ -30,7 +34,7 @@ const majorStep = (duration: number) => (duration > 600 ? 60 : duration > 180 ? 
 
 type DragMode = 'move' | 'start' | 'end'
 
-export function Timeline({ duration, time, crop, segments, delogos, selection, onSeek, onSelect, onDelogoRange, onSegmentRange, className }: Props) {
+export function Timeline({ duration, time, crop, segments, delogos, selection, showSegments = true, showDelogoTimes = true, onSeek, onSelect, onDelogoRange, onSegmentRange, className }: Props) {
   const lanes = useRef<HTMLDivElement>(null)
   const safeDuration = duration > 0 ? duration : 1
   const at = (t: number) => `${(t / safeDuration) * 100}%`
@@ -100,9 +104,9 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, o
     <div className={cn('grid grid-cols-[112px_1fr] text-[11px] select-none', className)}>
       <div className="border-r">
         <div className="h-5 border-b" />
-        <TrackHead icon={ScissorIcon} swatch="bg-mark-segment" label="片段" count={segments.length} />
+        {showSegments && <TrackHead icon={ScissorIcon} swatch="bg-mark-segment" label="片段" count={segments.length} />}
         {crop && <TrackHead icon={CropIcon} swatch="bg-mark-crop" label="裁剪" selected={selection?.kind === 'crop'} onClick={() => onSelect({ kind: 'crop' })} />}
-        {delogos.map((d, i) => (
+        {showDelogoTimes && delogos.map((d, i) => (
           <TrackHead
             key={d.id}
             icon={DelogoIcon}
@@ -130,6 +134,7 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, o
           })}
         </div>
 
+        {showSegments && (
         <Lane className="bg-[repeating-linear-gradient(135deg,var(--muted)_0_3px,transparent_3px_7px)]">
           {segments.length === 0 && (
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-muted-foreground">未设置片段，导出整段。按 I 设入点、S 切开</span>
@@ -150,6 +155,7 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, o
             </Bar>
           ))}
         </Lane>
+        )}
 
         {crop && (
           <Lane>
@@ -157,7 +163,7 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, o
           </Lane>
         )}
 
-        {delogos.map((d) => {
+        {showDelogoTimes && delogos.map((d) => {
           const selected = selection?.kind === 'delogo' && selection.id === d.id
           return (
             <Lane key={d.id} className={cn(selected && 'bg-mark-delogo/8')}>

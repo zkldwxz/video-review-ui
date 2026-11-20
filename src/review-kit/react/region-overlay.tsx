@@ -20,6 +20,8 @@ type Props = {
   showThirds?: boolean
   /** 裁剪框锁定的像素宽高比，例如 16/9；null 为自由 */
   cropAspect?: number | null
+  /** false 时 Delogo 不分时间段：框始终生效，标签不显示时间 */
+  showTimes?: boolean
   /** 不传回调时只展示，不可交互 */
   onSelect?: (s: Selection) => void
   onCropChange?: (rect: Rect, coalesceKey: string) => void
@@ -28,7 +30,7 @@ type Props = {
 }
 
 /** 画面上的裁剪框和 Delogo 框。坐标都是 0–1 归一化值，拖动和缩放的结果通过回调交出去。 */
-export function RegionOverlay({ width, height, time, crop, delogos, selection, showThirds = true, cropAspect, onSelect, onCropChange, onDelogoChange, className }: Props) {
+export function RegionOverlay({ width, height, time, crop, delogos, selection, showThirds = true, cropAspect, showTimes = true, onSelect, onCropChange, onDelogoChange, className }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const interactive = !!onSelect
 
@@ -87,7 +89,7 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
       )}
 
       {delogos.map((d, i) => {
-        const active = time >= d.start && time <= d.end
+        const active = !showTimes || (time >= d.start && time <= d.end)
         const selected = selection?.kind === 'delogo' && selection.id === d.id
         const apply = onDelogoChange && ((r: Rect, key: string) => onDelogoChange(d.id, r, key))
         return (
@@ -113,9 +115,11 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
               alignEnd={d.x + d.w > 0.75}
             >
               Delogo {i + 1}
-              <span className="tabular-nums opacity-75">
-                {formatShort(d.start)}–{formatShort(d.end)}
-              </span>
+              {showTimes && (
+                <span className="tabular-nums opacity-75">
+                  {formatShort(d.start)}–{formatShort(d.end)}
+                </span>
+              )}
               {d.origin && <span className="opacity-75">{modelLabel(d.origin)}</span>}
             </MarkLabel>
             {selected && <Handles onDown={apply ? (e, h) => beginDrag(e, d, h, undefined, apply) : undefined} />}

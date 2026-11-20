@@ -19,8 +19,8 @@ const statItems: { key: keyof VideoStats; label: string; icon: IconSvgElement }[
 ]
 
 export function InfoPanel() {
-  const { video, edits, media, dispatch, tagOptions } = useReviewer()
-  const src = video.source
+  const { video, edits, media, dispatch, tagOptions, features } = useReviewer()
+    const src = features.sourceInfo ? video.source : undefined
   const stats = statItems.filter((s) => src?.stats?.[s.key] !== undefined)
 
   return (
@@ -30,6 +30,8 @@ export function InfoPanel() {
           key={edits.title}
           defaultValue={edits.title}
           aria-label="标题"
+          readOnly={!features.rename}
+
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           onBlur={(e) => {
             const v = e.currentTarget.value.trim()
@@ -44,9 +46,11 @@ export function InfoPanel() {
 
       <AiTitle key={video.id} />
 
-      <Field label="标签">
-        <TagEditor tags={edits.tags} options={tagOptions} onChange={(tags) => dispatch({ type: 'setTags', tags })} />
-      </Field>
+      {features.tags && (
+        <Field label="标签">
+          <TagEditor tags={edits.tags} options={tagOptions} onChange={(tags) => dispatch({ type: 'setTags', tags })} />
+        </Field>
+      )}
 
       {stats.length > 0 && (
         <div className="grid grid-cols-3 gap-1.5">
