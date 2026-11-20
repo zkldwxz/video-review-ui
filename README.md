@@ -1,5 +1,7 @@
 # 审片台 video-review-ui
 
+[![CI](https://github.com/zkldwxz/video-review-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/zkldwxz/video-review-ui/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 批量视频审核的前端组件和工作台模板：在画面上框选裁剪区域和 Delogo（去台标 / 水印）区域，在时间轴上切出要保留的片段，给出通过或驳回的结论，最后导出带像素坐标的处理任务交给后端转码。
 
 ![工作台](docs/workstation.png)
@@ -67,7 +69,9 @@ pnpm build
 
 技术栈：Vite 8、React 19、TypeScript 7、Tailwind CSS v4、shadcn/ui、Hugeicons。
 
-依赖安全：`pnpm-workspace.yaml` 设置了 `minimumReleaseAge`（不安装发布不足一天的版本）和 `strictDepBuilds`（依赖的安装脚本默认不执行）。
+每次推送和 PR 都会在 GitHub Actions 上跑同样的检查（`.github/workflows/ci.yml`）。
+
+依赖安全：CI 里的 Action 固定到 commit SHA，权限只读；`pnpm-workspace.yaml` 设置了 `minimumReleaseAge`（不安装发布不足一天的版本）和 `strictDepBuilds`（依赖的安装脚本默认不执行）。
 
 ## 说明
 
