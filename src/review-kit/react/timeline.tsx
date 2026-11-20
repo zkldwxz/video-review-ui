@@ -1,9 +1,10 @@
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { CropIcon, ScissorIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { DelogoIcon } from '@/components/icons/review-icons'
 import { cn } from '@/lib/utils'
 import { clamp } from '../core/geometry'
+import { placeRulerLabels } from '../core/ruler'
 import { formatShort } from '../core/timecode'
 import type { DelogoRegion, Rect, TimeRange } from '../core/types'
 import type { Selection } from './use-reviewer-state'
@@ -37,11 +38,27 @@ type DragMode = 'move' | 'start' | 'end'
 
 export function Timeline({ duration, time, crop, segments, delogos, selection, showSegments = true, showDelogoTimes = true, onSeek, onSelect, onDelogoRange, onSegmentRange, className }: Props) {
   const lanes = useRef<HTMLDivElement>(null)
+  const ruler = useRef<HTMLDivElement>(null)
+  const [labelPositions, setLabelPositions] = useState<(number | null)[]>([])
   const safeDuration = duration > 0 ? duration : 1
   const at = (t: number) => `${(t / safeDuration) * 100}%`
   const step = majorStep(safeDuration)
-  const majors = Array.from({ length: Math.floor(safeDuration / step) + 1 }, (_, i) => i * step)
+  const majors = useMemo(() => Array.from({ length: Math.floor(safeDuration / step) + 1 }, (_, i) => i * step), [safeDuration, step])
   const minors = Array.from({ length: Math.floor(safeDuration / (step / 5)) + 1 }, (_, i) => (i * step) / 5)
+
+  useLayoutEffect(() => {
+    const element = ruler.current!
+    const labels = element.querySelectorAll<HTMLElement>('[data-ruler-label]')
+    const measure = () => {
+      const widths = majors.map((time, index) => ({ time, width: labels[index].getBoundingClientRect().width }))
+      setLabelPositions(placeRulerLabels(widths, safeDuration, element.getBoundingClientRect().width))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    labels.forEach((label) => observer.observe(label))
+    return () => observer.disconnect()
+  }, [majors, safeDuration])
 
   const timeAt = (clientX: number) => {
     const r = lanes.current!.getBoundingClientRect()
@@ -105,7 +122,7 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
   return (
     <div className={cn('grid grid-cols-[112px_1fr] text-caption select-none', className)}>
       <div className="border-r">
-        <div className="h-5 border-b" />
+        <div className="h-6 border-b" />
         {showSegments && <TrackHead icon={ScissorIcon} swatch="bg-mark-segment" label="片段" count={segments.length} />}
         {crop && <TrackHead icon={CropIcon} swatch="bg-mark-crop" label="裁剪" selected={selection?.kind === 'crop'} onClick={() => onSelect({ kind: 'crop' })} />}
         {showDelogoTimes && delogos.map((d, i) => (
@@ -121,19 +138,22 @@ export function Timeline({ duration, time, crop, segments, delogos, selection, s
       </div>
 
       <div ref={lanes} className="relative mx-3 cursor-pointer" onPointerDown={scrub}>
-        <div className="relative h-5 border-b text-muted-foreground">
+        <div ref={ruler} className="relative h-6 border-b text-muted-foreground">
           {minors.map((t) => (
             <span key={t} className="absolute bottom-0 h-1 w-px bg-border" style={{ left: at(t) }} />
           ))}
-          {majors.map((t) => {
-            const nearEnd = t / safeDuration > 0.95
-            return (
-              <span key={t} className={cn('absolute bottom-0 flex h-full items-end', nearEnd && '-translate-x-full')} style={{ left: at(t) }}>
-                <span className="h-2 w-px bg-muted-foreground/50" />
-                <span className={cn('mb-1 tabular-nums', nearEnd ? 'order-first mr-1' : 'ml-1')}>{formatShort(t)}</span>
+          {majors.map((t, index) => (
+            <span key={t}>
+              <span aria-hidden="true" className="absolute bottom-0 h-2 w-px bg-muted-foreground/50" style={{ left: at(t) }} />
+              <span
+                data-ruler-label=""
+                className={cn('absolute bottom-2 w-max whitespace-nowrap tabular-nums', labelPositions[index] == null && 'invisible')}
+                style={{ left: labelPositions[index] ?? 0 }}
+              >
+                {formatShort(t)}
               </span>
-            )
-          })}
+            </span>
+          ))}
         </div>
 
         {showSegments && (
