@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "审片台请求头助手",
+  "description": "给审片台页面发出的视频和接口请求改写 Referer、Origin、User-Agent，通过 CDN 防盗链校验。",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["declarativeNetRequest", "storage"],
+  "host_permissions": [
+    "*://localhost/*",
+    "*://127.0.0.1/*",
+    "*://*.bilibili.com/*",
+    "*://*.bilivideo.com/*",
+    "*://*.bilivideo.cn/*",
+    "*://*.hdslb.com/*"
+  ],
+  "optional_host_permissions": ["*://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "审片台请求头助手" },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>审片台请求头助手</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/32.png" alt="" width="20" height="20" />
+      <h1>请求头助手</h1>
+      <span id="status" class="muted"></span>
+    </header>
+    <main id="list"></main>
+    <footer>
+      <button id="add" type="button">新建规则</button>
+      <button id="reset" type="button" class="ghost">恢复预设</button>
+    </footer>
+
+    <template id="rule-tpl">
+      <section class="rule">
+        <div class="rule-head">
+          <button type="button" class="expand" aria-expanded="false">
+            <span class="name"></span>
+            <span class="summary muted"></span>
+          </button>
+          <label class="switch" title="启用">
+            <input type="checkbox" class="enabled" />
+            <span></span>
+          </label>
+        </div>
+        <form class="rule-form" hidden>
+          <label>名称<input name="name" required /></label>
+          <label>目标域名<small>每行一个，自动包含子域名</small><textarea name="domains" rows="4" spellcheck="false"></textarea></label>
+          <label>生效页面<small>只改写从这些页面发出的请求</small><textarea name="initiators" rows="2" spellcheck="false"></textarea></label>
+          <label>Referer<input name="referer" placeholder="https://www.example.com/" spellcheck="false" /></label>
+          <label>Origin<input name="origin" placeholder="https://www.example.com" spellcheck="false" /></label>
+          <label
+            >User-Agent
+            <select name="uaPreset"></select>
+            <input name="userAgent" placeholder="留空使用浏览器自带" spellcheck="false" />
+          </label>
+          <label>其他请求头<small>每行一个，格式 Name: value</small><textarea name="headers" rows="2" spellcheck="false"></textarea></label>
+          <label class="check"><input type="checkbox" name="cors" />允许页面跨域读取响应（接口请求需要）</label>
+          <p class="error" hidden></p>
+          <div class="actions">
+            <button type="submit">保存</button>
+            <button type="button" class="ghost danger remove">删除</button>
+          </div>
+        </form>
+      </section>
+    </template>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

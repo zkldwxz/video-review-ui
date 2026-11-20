@@ -1,0 +1,109 @@
+import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { defaultKeymap, VideoReviewer, type Keymap, type ReviewTask, type ReviewVideo, type TitleGenerator, type VideoReviewerHandle } from '@/review-kit'
+import { loadBilibiliVideo } from './bilibili'
+import { demoVideos, tagOptions } from './sample-data'
+
+const KEYMAP_KEY = 'review-kit:keymap'
+const DEFAULT_BVID = 'BV1GJ411x7h7'
+
+const loadKeymap = (): Keymap => {
+  const raw = localStorage.getItem(KEYMAP_KEY)
+  return raw ? { ...defaultKeymap, ...(JSON.parse(raw) as Partial<Keymap>) } : defaultKeymap
+}
+
+/** 调开发服务器的 /api/titles（server/title-api.ts），API Key 只在服务端 */
+const generateTitles: TitleGenerator = async ({ prompt, video, edits }, signal) => {
+  const res = await fetch('/api/titles', {
+    method: 'POST',
+    signal,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      currentTitle: edits.title,
+      category: video.source?.category,
+      tags: edits.tags,
+      author: video.source?.author,
+      platform: video.source?.platform,
+    }),
+  })
+  const json = (await res.json()) as { titles?: string[]; error?: string }
+  if (!res.ok || !json.titles) throw new Error(json.error ?? `HTTP ${res.status}`)
+  return json.titles
+}
+
+type BiliState = { kind: 'loading'; bvid: string } | { kind: 'ok'; video: ReviewVideo } | { kind: 'error'; message: string }
+
+/** 宿主接入示例：传入视频列表，保存时拿到处理任务；另外现查一条 B 站视频加进队列 */
+export function ReviewerDemo() {
+  const reviewer = useRef<VideoReviewerHandle>(null)
+  const [videos, setVideos] = useState(demoVideos)
+  const [lastTask, setLastTask] = useState<ReviewTask | null>(null)
+  const [changes, setChanges] = useState(0)
+  const [initialKeymap] = useState(loadKeymap)
+  const [bvid, setBvid] = useState(DEFAULT_BVID)
+  const [bili, setBili] = useState<BiliState>({ kind: 'loading', bvid: DEFAULT_BVID })
+
+  const onLoaded = (video: ReviewVideo) => {
+    setVideos((list) => [video, ...list.filter((v) => v.id !== video.id)])
+    setBili({ kind: 'ok', video })
+  }
+  const onFailed = (e: unknown) => setBili({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    loadBilibiliVideo(DEFAULT_BVID, ctrl.signal).then(onLoaded, (e) => !ctrl.signal.aborted && onFailed(e))
+    return () => ctrl.abort()
+  }, [])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <form
+        className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setBili({ kind: 'loading', bvid: bvid.trim() })
+          loadBilibiliVideo(bvid.trim()).then(onLoaded, onFailed)
+        }}
+      >
+        <span className="font-medium">B 站测试视频</span>
+        <Input value={bvid} onChange={(e) => setBvid(e.target.value)} aria-label="BV 号" className="h-7 w-40 tabular-nums" spellCheck={false} />
+        <Button type="submit" size="sm" variant="outline" disabled={bili.kind === 'loading'}>
+          {bili.kind === 'loading' ? '解析中…' : '加载'}
+        </Button>
+        {bili.kind === 'ok' && (
+          <>
+            <span className="text-muted-foreground">已加入队列：{bili.video.edits.title}</span>
+            <Button type="button" size="sm" variant="ghost" onClick={() => reviewer.current?.selectVideo(bili.video.id)}>
+              打开
+            </Button>
+          </>
+        )}
+        {bili.kind === 'error' && <span className="min-w-0 flex-1 text-destructive">{bili.message}</span>}
+      </form>
+
+      <VideoReviewer
+        ref={reviewer}
+        videos={videos}
+        tagOptions={tagOptions}
+        generateTitles={generateTitles}
+        keymap={initialKeymap}
+        onKeymapChange={(k) => localStorage.setItem(KEYMAP_KEY, JSON.stringify(k))}
+        onChange={() => setChanges((n) => n + 1)}
+        onSave={async (task) => {
+          // 真实接入时在这里提交给后端或转码队列
+          await new Promise((r) => setTimeout(r, 300))
+          setLastTask(task)
+        }}
+        className="h-[min(860px,calc(100dvh-120px))] min-h-[680px]"
+      />
+      <details className="rounded-lg border bg-card text-xs">
+        <summary className="cursor-pointer px-3 py-2 text-muted-foreground select-none">
+          宿主收到的数据：onChange {changes} 次{lastTask ? `，最近一次 onSave 来自「${lastTask.title}」` : '，按 Enter 保存后显示 onSave 的任务'}
+        </summary>
+        {lastTask && <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-[11px] leading-4 tabular-nums">{JSON.stringify(lastTask, null, 2)}</pre>}
+      </details>
+    </div>
+  )
+}

@@ -1,0 +1,4 @@
+# 供应链防护：不装发布不足 1 天的版本；依赖的 install 脚本默认不执行，需要时显式放行
+minimumReleaseAge: 1440
+strictDepBuilds: true
+onlyBuiltDependencies: []

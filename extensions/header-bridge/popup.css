@@ -1,0 +1,79 @@
+/* 与审片台 DESIGN.md 一致：灰绿纸色 / 石墨色，铜绿主色 */
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.948 0.007 155);
+  --card: oklch(0.972 0.005 155);
+  --fg: oklch(0.285 0.014 165);
+  --muted: oklch(0.5 0.014 165);
+  --border: oklch(0.285 0.02 165 / 14%);
+  --input: oklch(0.285 0.02 165 / 5%);
+  --primary: oklch(0.52 0.08 185);
+  --primary-fg: oklch(0.98 0.006 155);
+  --danger: oklch(0.56 0.16 27);
+  --success: oklch(0.55 0.11 152);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.215 0.006 165);
+    --card: oklch(0.245 0.007 165);
+    --fg: oklch(0.885 0.008 150);
+    --muted: oklch(0.67 0.012 160);
+    --border: oklch(0.885 0.01 150 / 10%);
+    --input: oklch(0.885 0.01 150 / 5%);
+    --primary: oklch(0.74 0.085 182);
+    --primary-fg: oklch(0.22 0.02 180);
+    --danger: oklch(0.68 0.15 25);
+    --success: oklch(0.74 0.11 152);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px/1.5 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+header { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+h1 { margin: 0; font-size: 14px; font-weight: 600; }
+.muted { color: var(--muted); }
+#status { margin-left: auto; font-size: 11px; }
+#status.ok { color: var(--success); }
+#status.bad { color: var(--danger); }
+main { display: flex; flex-direction: column; gap: 6px; padding: 12px; max-height: 480px; overflow-y: auto; }
+.rule { background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+.rule-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 0; }
+.expand { all: unset; flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 10px; cursor: pointer; border-radius: 8px; }
+.expand:focus-visible { outline: 2px solid color-mix(in oklch, var(--primary) 50%, transparent); }
+.name { font-size: 13px; font-weight: 500; }
+.summary { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-form { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-top: 1px solid var(--border); }
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+label small { font-size: 11px; opacity: 0.8; }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); }
+input:not([type='checkbox']), textarea, select {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--fg);
+  font: inherit;
+}
+textarea { resize: vertical; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid color-mix(in oklch, var(--primary) 40%, transparent); border-color: var(--primary); }
+button { height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: var(--primary); color: var(--primary-fg); font: inherit; font-weight: 500; cursor: pointer; }
+button.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
+button.danger { color: var(--danger); }
+button:hover { filter: brightness(1.05); }
+.actions, footer { display: flex; gap: 8px; }
+footer { padding: 0 12px 12px; }
+.error { margin: 0; padding: 6px 8px; border-radius: 6px; background: color-mix(in oklch, var(--danger) 12%, transparent); color: var(--danger); }
+.switch { position: relative; width: 28px; height: 16px; flex: none; }
+.switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--border); transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
+.switch span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--card); transition: transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.switch input:checked + span { background: var(--primary); }
+.switch input:checked + span::after { transform: translateX(12px); }
+.switch input:focus-visible + span { outline: 2px solid color-mix(in oklch, var(--primary) 50%, transparent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
