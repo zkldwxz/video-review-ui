@@ -33,7 +33,7 @@ import { buildTask, type ReviewTask } from '../core/task'
 import { DEFAULT_TITLE_PROMPT, type TitleGenerator } from '../core/title-prompt'
 import { describeChange } from '../core/describe'
 import { formatShort, formatTimecode } from '../core/timecode'
-import type { DelogoRegion, MediaInfo, ReviewEdits, ReviewVideo, TimeRange } from '../core/types'
+import type { DelogoMode, DelogoRegion, MediaInfo, ReviewEdits, ReviewVideo, TimeRange } from '../core/types'
 import { ReviewerContext, type ReviewerContextValue } from './context'
 import { InlineTitle } from './fields'
 import { ImportDialog } from './import-dialog'
@@ -55,6 +55,11 @@ export type VideoReviewerHandle = {
   /** 把模型预设的区域加到某条视频（作为一步，可撤销） */
   importRegions: (videoId: string, regions: DelogoRegion[]) => void
   getEdits: (videoId: string) => ReviewEdits | undefined
+  /**
+   * 按当前编辑生成处理任务，和保存时交给 onSave 的一样（已按功能开关整理），但不触发保存。
+   * 不传 videoId 取当前视频；其他视频按 ReviewVideo 声明的宽高和时长换算，没声明时返回 undefined。
+   */
+  getTask: (videoId?: string) => ReviewTask | undefined
   selectVideo: (videoId: string) => void
 }
 
@@ -77,6 +82,14 @@ export type VideoReviewerProps = {
   titlePromptTemplate?: string
   /** 功能开关，只写要改的项，例如 { segments: false }；也可传 featurePresets.delogoOnly。默认值见 core/features.ts */
   features?: Partial<ReviewFeatures>
+  /** 嵌入到宿主页面：去掉外框和圆角，快捷键只在用户操作这块区域时响应（焦点或最后一次点击在组件内） */
+  embedded?: boolean
+  /** 只读：能播放、切换视频、查看区域和数值，不能修改、不能保存 */
+  readOnly?: boolean
+  /** 整个组件不可操作（例如宿主提交中），快捷键也停用 */
+  disabled?: boolean
+  /** 固定 Delogo 处理方式：传了就隐藏“处理方式”选择，所有区域（含模型导入的）都按它导出 */
+  delogoMode?: DelogoMode
   ref?: Ref<VideoReviewerHandle>
   className?: string
 }
@@ -97,6 +110,12 @@ const TAB_OF: Record<NonNullable<Selection>['kind'], Tab> = { crop: 'crop', delo
 const MIN_RANGE = 0.1
 const SEEK_STEP = 5
 
+/** 保存时：待审且有标记的视频记为“已标记” */
+function promoteStatus(e: ReviewEdits): ReviewEdits {
+  const hasMarks = !!e.crop || e.delogos.length > 0 || e.segments.length > 0
+  return e.status === 'pending' && hasMarks ? { ...e, status: 'marked' } : e
+}
+
 /** 插入或替换后，新片段在排好序的数组里的位置 */
 function indexAfter(segments: TimeRange[], seg: TimeRange, replace?: number) {
   const next = replace === undefined ? [...segments, seg] : segments.map((s, i) => (i === replace ? seg : s))
@@ -115,6 +134,10 @@ function ReviewerBody({
   generateTitles,
   titlePromptTemplate = DEFAULT_TITLE_PROMPT,
   features,
+  embedded = false,
+  readOnly = false,
+  disabled = false,
+  delogoMode,
   ref,
   className,
 }: VideoReviewerProps) {
@@ -131,10 +154,13 @@ function ReviewerBody({
     fps: video.fps ?? 25,
   }
   const f = resolveFeatures(features)
+  const locked = readOnly || disabled
   // 界面和保存都用按开关整理过的内容：关掉的功能不显示也不导出
-  const edits = applyFeatures(rawEdits, f, media.duration)
-  const aiTitle = !!generateTitles && f.rename
-  const enabled = (a: ShortcutAction) => isActionEnabled(a, f, { aiTitle })
+  const edits = applyFeatures(rawEdits, f, media.duration, { delogoMode })
+  const aiTitle = !!generateTitles && f.rename && !locked
+  const enabled = (a: ShortcutAction) => isActionEnabled(a, f, { aiTitle, readOnly: locked })
+  const canImport = f.modelImport && !locked
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const [keymap, setKeymapState] = useState<Keymap>(initialKeymap ?? defaultKeymap)
   const setKeymap = (k: Keymap) => {
@@ -185,17 +211,30 @@ function ReviewerBody({
     onActiveVideoChange?.(id)
   }
 
+  const taskFor = (v: ReviewVideo, m: MediaInfo | undefined): ReviewTask | undefined => {
+    const raw = st.editsOf(v.id)
+    return raw && m && buildTask(v, promoteStatus(applyFeatures(raw, f, m.duration, { delogoMode })), m)
+  }
+
   useImperativeHandle(ref, () => ({
     importRegions: (videoId, regions) => st.dispatch({ type: 'addDelogos', regions }, undefined, videoId),
     getEdits: (videoId) => st.editsOf(videoId),
+    getTask: (videoId = video.id) => {
+      const v = videos.find((x) => x.id === videoId)
+      if (!v) return undefined
+      if (v.id === video.id) return taskFor(v, media)
+      return taskFor(v, v.width && v.height && v.duration ? { width: v.width, height: v.height, duration: v.duration, fps: v.fps ?? 25 } : undefined)
+    },
     selectVideo,
   }))
 
   const now = () => player.ref.current?.currentTime ?? ps.time
-  const dispatch = st.dispatch
+  // 只读 / 禁用时界面上已经去掉了编辑入口，这里再兜一层，保证不会改到数据
+  const dispatch: typeof st.dispatch = locked ? () => {} : st.dispatch
+
 
   const newDelogo = () => {
-    const region: DelogoRegion = { id: createId('d'), x: 0.4, y: 0.44, w: 0.2, h: 0.12, start: 0, end: media.duration, mode: 'delogo' }
+    const region: DelogoRegion = { id: createId('d'), x: 0.4, y: 0.44, w: 0.2, h: 0.12, start: 0, end: media.duration, mode: delogoMode ?? 'delogo' }
     dispatch({ type: 'addDelogo', region })
     select({ kind: 'delogo', id: region.id })
   }
@@ -270,18 +309,14 @@ function ReviewerBody({
   }
 
   const save = async () => {
-    if (saving) return
+    if (saving || locked) return
     if (f.decision && edits.status === 'rejected' && !edits.note.trim()) {
       setSaveError('驳回需要填写备注')
       notify('驳回需要填写备注', { tone: 'error' })
       return
     }
-    let current = edits
-    const hasMarks = !!current.crop || current.delogos.length > 0 || current.segments.length > 0
-    if (current.status === 'pending' && hasMarks) {
-      dispatch({ type: 'setDecision', status: 'marked' })
-      current = { ...current, status: 'marked' }
-    }
+    const current = promoteStatus(edits)
+    if (current.status !== edits.status) dispatch({ type: 'setDecision', status: current.status })
     setSaving(true)
     setSaveError(null)
     try {
@@ -313,7 +348,8 @@ function ReviewerBody({
 
   useShortcuts({
     keymap: activeKeymap,
-    enabled: !importOpen && !keysOpen,
+    enabled: !importOpen && !keysOpen && !disabled,
+    scope: embedded ? rootRef : undefined,
     onEscape: () => st.setSelection(null),
     handlers: {
       playPause: player.togglePlay,
@@ -361,6 +397,8 @@ function ReviewerBody({
     undo: st.undo,
     keymap,
     features: f,
+    readOnly: locked,
+    delogoMode,
     generateTitles: aiTitle ? generateTitles : undefined,
     titlePromptTemplate,
     aiTitleInput,
@@ -371,7 +409,18 @@ function ReviewerBody({
 
   return (
     <ReviewerContext value={ctx}>
-      <div className={cn('grid min-h-0 overflow-hidden rounded-xl border bg-card', f.queue ? 'grid-cols-[280px_minmax(0,1fr)_340px]' : 'grid-cols-[minmax(0,1fr)_340px]', className)}>
+      <div
+        ref={rootRef}
+        inert={disabled}
+        aria-disabled={disabled || undefined}
+        className={cn(
+          'grid min-h-0 overflow-hidden bg-card',
+          !embedded && 'rounded-xl border',
+          f.queue ? 'grid-cols-[280px_minmax(0,1fr)_340px]' : 'grid-cols-[minmax(0,1fr)_340px]',
+          disabled && 'opacity-60',
+          className,
+        )}
+      >
         {f.queue && (
         <QueuePanel
           videos={queue}
@@ -379,7 +428,7 @@ function ReviewerBody({
           doneCount={doneCount}
           editsOf={(id) => {
             const e = st.editsOf(id)
-            return e && applyFeatures(e, f, videos.find((v) => v.id === id)?.duration ?? 0)
+            return e && applyFeatures(e, f, videos.find((v) => v.id === id)?.duration ?? 0, { delogoMode })
           }}
           activeId={video.id}
           onSelect={selectVideo}
@@ -393,13 +442,13 @@ function ReviewerBody({
         <section className="flex min-h-0 min-w-0 flex-col">
           <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3">
             <div className="flex min-w-0 flex-col">
-              {f.rename ? (
+              {f.rename && !locked ? (
                 <InlineTitle value={edits.title} onCommit={(title) => dispatch({ type: 'rename', title })} />
               ) : (
                 <span className="truncate text-sm font-semibold">{edits.title}</span>
               )}
               {f.sourceInfo && (
-              <div className="flex min-w-0 gap-3 truncate text-[11px] text-muted-foreground">
+              <div className="flex min-w-0 gap-3 truncate text-caption text-muted-foreground">
                 {src?.platform && <span>{src.platform}</span>}
                 {src?.author && <span>{src.author}</span>}
                 {src?.externalId && <span className="tabular-nums">ID {src.externalId}</span>}
@@ -410,8 +459,12 @@ function ReviewerBody({
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {aiTitle && <IconAction icon={AiMagicIcon} label="AI 改写标题" combo={keymap.aiTitle[0]} onClick={focusAiTitle} />}
-              <IconAction icon={Undo02Icon} label="撤销" combo={keymap.undo[0]} onClick={undo} disabled={!st.canUndo} />
-              <IconAction icon={Redo02Icon} label="重做" combo={keymap.redo[0]} onClick={redo} disabled={!st.canRedo} />
+              {!locked && (
+                <>
+                  <IconAction icon={Undo02Icon} label="撤销" combo={keymap.undo[0]} onClick={undo} disabled={!st.canUndo} />
+                  <IconAction icon={Redo02Icon} label="重做" combo={keymap.redo[0]} onClick={redo} disabled={!st.canRedo} />
+                </>
+              )}
               <IconAction icon={KeyboardIcon} label="快捷键设置" onClick={() => setKeysOpen(true)} />
             </div>
           </header>
@@ -429,8 +482,8 @@ function ReviewerBody({
                 cropAspect={cropAspect}
                 showTimes={f.delogoTimeRange}
                 onSelect={select}
-                onCropChange={(crop, key) => dispatch({ type: 'setCrop', crop }, key)}
-                onDelogoChange={(id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
+                onCropChange={locked ? undefined : (crop, key) => dispatch({ type: 'setCrop', crop }, key)}
+                onDelogoChange={locked ? undefined : (id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
               />
             </Stage>
             <ToastViewport toasts={toasts} onDismiss={dismiss} className="absolute inset-x-0 bottom-3 z-20" />
@@ -442,20 +495,20 @@ function ReviewerBody({
               <HugeiconsIcon icon={ps.playing ? PauseIcon : PlayIcon} strokeWidth={1.75} />
             </Button>
             <IconAction icon={NextIcon} label="下一帧" combo={keymap.frameForward[0]} onClick={() => frame(1)} />
-            <div className="ml-2 flex items-baseline gap-1.5 tabular-nums">
+            <div className="ml-2 flex shrink-0 items-baseline gap-1.5 whitespace-nowrap tabular-nums">
               <span className="text-xl leading-none font-medium">{formatTimecode(ps.time, media.fps)}</span>
               <span className="text-xs text-muted-foreground">/ {formatTimecode(media.duration, media.fps)}</span>
             </div>
-            {(enabled('markIn') || f.delogo) && <Separator orientation="vertical" className="mx-2 h-5!" />}
+            {(enabled('markIn') || enabled('newDelogo') || canImport) && <Separator orientation="vertical" className="mx-2 h-5!" />}
             {enabled('markIn') && (
               <>
                 <IconAction icon={MarkInIcon} label={f.segments ? '设为入点' : '设为 Delogo 开始'} combo={keymap.markIn[0]} onClick={() => mark('start')} />
                 <IconAction icon={MarkOutIcon} label={f.segments ? '设为出点' : '设为 Delogo 结束'} combo={keymap.markOut[0]} onClick={() => mark('end')} />
               </>
             )}
-            {f.segments && <IconAction icon={SplitAtPlayheadIcon} label="在播放头处切开" combo={keymap.split[0]} onClick={split} />}
-            {f.delogo && <IconAction icon={DelogoIcon} label="新建 Delogo 区域" combo={keymap.newDelogo[0]} onClick={newDelogo} />}
-            {f.modelImport && <IconAction icon={AiScanIcon} label="导入模型结果" onClick={() => setImportOpen(true)} />}
+            {enabled('split') && <IconAction icon={SplitAtPlayheadIcon} label="在播放头处切开" combo={keymap.split[0]} onClick={split} />}
+            {enabled('newDelogo') && <IconAction icon={DelogoIcon} label="新建 Delogo 区域" combo={keymap.newDelogo[0]} onClick={newDelogo} />}
+            {canImport && <IconAction icon={AiScanIcon} label="导入模型结果" onClick={() => setImportOpen(true)} />}
             <div className="ml-auto flex items-center gap-1">
               <SpeedMenu rate={ps.rate} onChange={player.setRate} combos={[keymap.speedDown[0], keymap.speedUp[0]]} />
             </div>
@@ -473,8 +526,8 @@ function ReviewerBody({
               showDelogoTimes={f.delogoTimeRange}
               onSeek={player.seek}
               onSelect={select}
-              onDelogoRange={(id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
-              onSegmentRange={(i, r, key) => dispatch({ type: 'updateSegment', index: i, segment: r }, key)}
+              onDelogoRange={locked ? undefined : (id, r, key) => dispatch({ type: 'updateDelogo', id, patch: r }, key)}
+              onSegmentRange={locked ? undefined : (i, r, key) => dispatch({ type: 'updateSegment', index: i, segment: r }, key)}
               className="pb-2"
             />
           </div>
@@ -504,6 +557,8 @@ function ReviewerBody({
             </TabsContent>
           </Tabs>
 
+          {(f.decision || !locked) && (
+          <>
           <Separator />
           <Decision
             key={video.id}
@@ -515,7 +570,10 @@ function ReviewerBody({
             error={saveError}
             saveCombo={keymap.save[0]}
             showDecision={f.decision}
+            readOnly={locked}
           />
+          </>
+          )}
         </aside>
       </div>
 
@@ -540,7 +598,7 @@ function TabTrigger({ value, icon, label, count }: { value: Tab; icon: IconSvgEl
     <TabsTrigger value={value} className="gap-1">
       <HugeiconsIcon icon={icon} strokeWidth={1.5} data-icon="inline-start" />
       {label}
-      {count ? <span className="text-[10px] text-muted-foreground tabular-nums">{count}</span> : null}
+      {count ? <span className="text-micro text-muted-foreground tabular-nums">{count}</span> : null}
     </TabsTrigger>
   )
 }
@@ -594,6 +652,7 @@ function Decision({
   error,
   saveCombo,
   showDecision,
+  readOnly,
 }: {
   edits: ReviewEdits
   onDecision: (status: ReviewEdits['status'], note?: string) => void
@@ -603,6 +662,7 @@ function Decision({
   error: string | null
   saveCombo?: string
   showDecision: boolean
+  readOnly: boolean
 }) {
   const noteRequired = showDecision && edits.status === 'rejected' && !edits.note.trim()
   return (
@@ -610,14 +670,14 @@ function Decision({
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold">{showDecision ? '审核结论' : '保存任务'}</h3>
         {savedAt && !error && (
-          <span key={savedAt} className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+          <span key={savedAt} className="flex items-center gap-1 text-caption text-muted-foreground tabular-nums">
             <HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} strokeWidth={1.75} className="animate-saved-pop text-success" />
             已保存 {new Date(savedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
           </span>
         )}
       </div>
       {showDecision && (
-      <>
+      <fieldset disabled={readOnly} className="contents">
       <ToggleGroup
         type="single"
         value={edits.status === 'approved' || edits.status === 'rejected' ? edits.status : ''}
@@ -646,14 +706,18 @@ function Decision({
         aria-invalid={noteRequired || undefined}
         className="min-h-14 resize-none text-xs"
       />
-      </>
+      </fieldset>
       )}
-      {error && <p className="text-[11px] text-destructive">保存失败：{error}</p>}
-      <Button onClick={onSave} disabled={saving || noteRequired} {...keepFocus}>
-        {saving ? '保存中…' : '保存'}
-        {saveCombo && !saving && <ComboKbd combo={saveCombo} />}
-      </Button>
-      {noteRequired && <p className="text-[11px] text-muted-foreground">驳回需要填写备注后才能保存。</p>}
+      {!readOnly && (
+        <>
+          {error && <p className="text-caption text-destructive">保存失败：{error}</p>}
+          <Button onClick={onSave} disabled={saving || noteRequired} {...keepFocus}>
+            {saving ? '保存中…' : '保存'}
+            {saveCombo && !saving && <ComboKbd combo={saveCombo} />}
+          </Button>
+          {noteRequired && <p className="text-caption text-muted-foreground">驳回需要填写备注后才能保存。</p>}
+        </>
+      )}
     </div>
   )
 }

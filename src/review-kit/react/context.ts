@@ -4,7 +4,7 @@ import type { EditAction } from '../core/edits'
 import type { ReviewFeatures } from '../core/features'
 import type { Keymap } from '../core/shortcuts'
 import type { TitleGenerator } from '../core/title-prompt'
-import type { MediaInfo, ReviewEdits, ReviewVideo } from '../core/types'
+import type { DelogoMode, MediaInfo, ReviewEdits, ReviewVideo } from '../core/types'
 import type { Notify } from './use-toasts'
 import type { Player } from './use-player'
 import type { Selection } from './use-reviewer-state'
@@ -34,6 +34,11 @@ export type ReviewerContextValue = {
   keymap: Keymap
   /** 已合并默认值的功能开关 */
   features: ReviewFeatures
+  /** 只读或禁用：面板里只展示，不给编辑入口 */
+  readOnly: boolean
+  /** 固定的 Delogo 处理方式，传了就不显示选择 */
+  delogoMode?: DelogoMode
+
   /** 关掉改标题时为 undefined */
   generateTitles?: TitleGenerator
   titlePromptTemplate: string

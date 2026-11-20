@@ -85,8 +85,8 @@ export function ShortcutSettings({ open, onOpenChange, keymap, onChange, isEnabl
                   {g.actions.map(({ action, label, hint }) => (
                     <div key={action} className="flex min-h-10 items-center gap-3 py-1.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px]">{label}</div>
-                        {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+                        <div className="text-body">{label}</div>
+                        {hint && <div className="text-caption text-muted-foreground">{hint}</div>}
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         {keymap[action].map((combo) => (

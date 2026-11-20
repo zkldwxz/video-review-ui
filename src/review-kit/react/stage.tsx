@@ -83,7 +83,7 @@ export function Stage({ player, mediaKey, src, poster, width, height, onBackgrou
       {state.error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center text-white" role="alert">
           <HugeiconsIcon icon={Alert02Icon} size={24} strokeWidth={1.5} className="text-white/80" />
-          <p className="max-w-[40ch] text-[13px]">{state.error}</p>
+          <p className="max-w-[40ch] text-body">{state.error}</p>
           <Button size="sm" variant="secondary" onClick={player.retry}>
             重新加载
           </Button>

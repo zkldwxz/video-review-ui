@@ -68,13 +68,12 @@ export function AiTitle() {
           }}
           placeholder="例如：生成一个舞蹈视频的标题"
           aria-label="标题生成要求"
-          className="h-7 text-xs"
         />
         <Button size="sm" onClick={run} disabled={state.kind === 'loading'}>
           {state.kind === 'loading' ? '生成中…' : '生成'}
         </Button>
       </div>
-      {!preset && state.kind === 'idle' && <p className="text-[11px] text-muted-foreground">这条视频没有分类，请自己描述想要的标题。</p>}
+      {!preset && state.kind === 'idle' && <p className="text-caption text-muted-foreground">这条视频没有分类，请自己描述想要的标题。</p>}
 
       {state.kind === 'loading' && (
         <div className="flex flex-col gap-1.5" aria-label="生成中">
@@ -84,7 +83,7 @@ export function AiTitle() {
         </div>
       )}
 
-      {state.kind === 'error' && <p className="text-[11px] text-destructive">生成失败：{state.message}</p>}
+      {state.kind === 'error' && <p className="text-caption text-destructive">生成失败：{state.message}</p>}
 
       {state.kind === 'done' && (
         <div className="flex flex-col gap-1">

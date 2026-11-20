@@ -27,6 +27,21 @@ describe('features', () => {
     expect(out.delogos[0]).toMatchObject({ start: 0, end: 30 })
   })
 
+  it('固定处理方式时所有区域都用它', () => {
+    const out = applyFeatures(edits, defaultFeatures, 30, { delogoMode: 'blur' })
+    expect(out.delogos.map((d) => d.mode)).toEqual(['blur'])
+    expect(out.delogos[0]).toMatchObject({ start: 8, end: 20 })
+  })
+
+  it('只读时只剩播放和浏览类快捷键', () => {
+    const ro = { aiTitle: true, readOnly: true }
+    expect(isActionEnabled('save', defaultFeatures, ro)).toBe(false)
+    expect(isActionEnabled('undo', defaultFeatures, ro)).toBe(false)
+    expect(isActionEnabled('newDelogo', defaultFeatures, ro)).toBe(false)
+    expect(isActionEnabled('playPause', defaultFeatures, ro)).toBe(true)
+    expect(isActionEnabled('nextVideo', defaultFeatures, ro)).toBe(true)
+  })
+
   it('全开时原样保留', () => {
     expect(applyFeatures(edits, defaultFeatures, 30)).toEqual(edits)
   })

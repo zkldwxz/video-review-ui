@@ -1,5 +1,5 @@
 import type { ShortcutAction } from './shortcuts'
-import type { ReviewEdits } from './types'
+import type { DelogoMode, ReviewEdits } from './types'
 
 /**
  * 功能开关。三种调整方式：
@@ -83,8 +83,12 @@ export function resolveFeatures(features?: Partial<ReviewFeatures>): ReviewFeatu
   return f
 }
 
+/** 只读时不可用的动作：所有会改动内容或提交的操作 */
+const EDIT_ACTIONS = new Set<ShortcutAction>(['newDelogo', 'newCrop', 'deleteSelected', 'markIn', 'markOut', 'split', 'undo', 'redo', 'save', 'aiTitle'])
+
 /** 当前开关下某个快捷键动作是否可用 */
-export function isActionEnabled(action: ShortcutAction, f: ReviewFeatures, opts: { aiTitle: boolean }): boolean {
+export function isActionEnabled(action: ShortcutAction, f: ReviewFeatures, opts: { aiTitle: boolean; readOnly?: boolean }): boolean {
+  if (opts.readOnly && EDIT_ACTIONS.has(action)) return false
   switch (action) {
     case 'prevVideo':
     case 'nextVideo':
@@ -107,12 +111,23 @@ export function isActionEnabled(action: ShortcutAction, f: ReviewFeatures, opts:
   }
 }
 
-/** 按开关整理要保存的内容：关掉的功能不进入任务，Delogo 不分时间段时统一为整段 */
-export function applyFeatures(edits: ReviewEdits, f: ReviewFeatures, duration: number): ReviewEdits {
+/**
+ * 按开关整理要保存的内容：关掉的功能不进入任务，Delogo 不分时间段时统一为整段。
+ * 传了 delogoMode 时所有区域（含模型导入的）都用这种处理方式。
+ */
+export function applyFeatures(edits: ReviewEdits, f: ReviewFeatures, duration: number, opts: { delogoMode?: DelogoMode } = {}): ReviewEdits {
+  const { delogoMode } = opts
+  const delogos = !f.delogo
+    ? []
+    : edits.delogos.map((d) => ({
+        ...d,
+        ...(!f.delogoTimeRange && { start: 0, end: duration }),
+        ...(delogoMode && { mode: delogoMode }),
+      }))
   return {
     ...edits,
     crop: f.crop ? edits.crop : null,
-    delogos: !f.delogo ? [] : f.delogoTimeRange ? edits.delogos : edits.delogos.map((d) => ({ ...d, start: 0, end: duration })),
+    delogos,
     segments: f.segments ? edits.segments : [],
   }
 }

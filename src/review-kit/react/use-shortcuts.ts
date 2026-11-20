@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { comboFromEvent, isEditableTarget, resolveAction, type Keymap, type ShortcutAction } from '../core/shortcuts'
 
 const HOLD_MS = 300
@@ -19,9 +19,11 @@ type Options = {
   /** 区分单击和长按的动作，例如 → 单击前进 5 秒、长按 2 倍速 */
   holds?: Partial<Record<ShortcutAction, HoldHandler>>
   onEscape?: () => void
+  /** 传了就只在用户正在操作这块区域时响应：焦点在里面，或最后一次点击落在里面。嵌入到宿主页面时用，避免抢宿主的按键 */
+  scope?: RefObject<HTMLElement | null>
 }
 
-export function useShortcuts({ keymap, enabled, handlers, holds = {}, onEscape }: Options) {
+export function useShortcuts({ keymap, enabled, handlers, holds = {}, onEscape, scope }: Options) {
   const latest = useRef({ keymap, handlers, holds, onEscape })
   useEffect(() => {
     latest.current = { keymap, handlers, holds, onEscape }
@@ -30,9 +32,20 @@ export function useShortcuts({ keymap, enabled, handlers, holds = {}, onEscape }
   useEffect(() => {
     if (!enabled) return
     const held = new Map<string, { action: ShortcutAction; timer: number; holding: boolean }>()
+    let pointerInside = false
+    const onPointerDown = (e: PointerEvent) => {
+      pointerInside = !!scope?.current?.contains(e.target as Node)
+    }
+    const inScope = () => {
+      const root = scope?.current
+      if (!scope) return true
+      if (!root) return false
+      const active = document.activeElement
+      return active && active !== document.body ? root.contains(active) : pointerInside
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing || isEditableTarget(e.target)) return
+      if (e.isComposing || isEditableTarget(e.target) || !inScope()) return
       if (e.code === 'Escape') {
         latest.current.onEscape?.()
         return
@@ -72,10 +85,12 @@ export function useShortcuts({ keymap, enabled, handlers, holds = {}, onEscape }
     // 切走窗口时按键松开事件会丢，统一收尾
     const onBlur = () => [...held.keys()].forEach(release)
 
+    window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
     return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
@@ -84,7 +99,7 @@ export function useShortcuts({ keymap, enabled, handlers, holds = {}, onEscape }
         if (entry.holding) latest.current.holds[entry.action]?.onHoldEnd()
       })
     }
-  }, [enabled])
+  }, [enabled, scope])
 }
 
 /** 鼠标点按钮时不抢焦点，避免之后空格 / 方向键被按钮吃掉；键盘 Tab 仍可聚焦 */

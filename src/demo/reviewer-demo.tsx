@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import {
   defaultKeymap,
@@ -9,7 +10,9 @@ import {
   featurePresets,
   resolveFeatures,
   VideoReviewer,
+  type DelogoMode,
   type Keymap,
+
   type ReviewFeatures,
   type ReviewTask,
   type ReviewVideo,
@@ -49,10 +52,15 @@ const generateTitles: TitleGenerator = async ({ prompt, video, edits }, signal) 
 
 const PRESET_LABELS: Record<keyof typeof featurePresets, string> = { full: '全部功能', delogoOnly: '只做 Delogo', delogoStatic: 'Delogo 整段生效', trimOnly: '只剪片段' }
 
+type DemoOptions = { features: ReviewFeatures; embedded: boolean; readOnly: boolean; disabled: boolean; delogoMode?: DelogoMode }
+const MODE_LABELS: Record<'embedded' | 'readOnly' | 'disabled', string> = { readOnly: '只读', disabled: '禁用', embedded: '嵌入（无外框，快捷键只在组件内生效）' }
+
 /** 演示用的功能开关；接入时直接传 features={{ ... }} 或改 core/features.ts 的默认值 */
-function FeatureToggles({ value, onChange }: { value: ReviewFeatures; onChange: (f: ReviewFeatures) => void }) {
+function FeatureToggles({ options, onChange }: { options: DemoOptions; onChange: (o: DemoOptions) => void }) {
   const id = useId()
+  const value = options.features
   const resolved = resolveFeatures(value)
+  const setFeatures = (features: ReviewFeatures) => onChange({ ...options, features })
   return (
     <details className="rounded-lg border bg-card text-xs">
       <summary className="cursor-pointer px-3 py-2 text-muted-foreground select-none">功能开关</summary>
@@ -60,7 +68,7 @@ function FeatureToggles({ value, onChange }: { value: ReviewFeatures; onChange: 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-muted-foreground">预设</span>
           {(Object.keys(featurePresets) as (keyof typeof featurePresets)[]).map((k) => (
-            <Button key={k} size="xs" variant="outline" onClick={() => onChange(featurePresets[k])}>
+            <Button key={k} size="xs" variant="outline" onClick={() => setFeatures(featurePresets[k])}>
               {PRESET_LABELS[k]}
             </Button>
           ))}
@@ -68,12 +76,35 @@ function FeatureToggles({ value, onChange }: { value: ReviewFeatures; onChange: 
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {(Object.keys(featureLabels) as (keyof ReviewFeatures)[]).map((k) => (
             <div key={k} className="flex items-center gap-1.5">
-              <Switch id={`${id}-${k}`} size="sm" checked={resolved[k]} disabled={resolved[k] !== value[k]} onCheckedChange={(v) => onChange({ ...value, [k]: v })} />
+              <Switch id={`${id}-${k}`} size="sm" checked={resolved[k]} disabled={resolved[k] !== value[k]} onCheckedChange={(v) => setFeatures({ ...value, [k]: v })} />
               <Label htmlFor={`${id}-${k}`} className="text-xs font-normal">
                 {featureLabels[k]}
               </Label>
             </div>
           ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-2">
+          {(Object.keys(MODE_LABELS) as (keyof typeof MODE_LABELS)[]).map((k) => (
+            <div key={k} className="flex items-center gap-1.5">
+              <Switch id={`${id}-${k}`} size="sm" checked={options[k]} onCheckedChange={(v) => onChange({ ...options, [k]: v })} />
+              <Label htmlFor={`${id}-${k}`} className="text-xs font-normal">
+                {MODE_LABELS[k]}
+              </Label>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Delogo 处理方式</span>
+            <Select value={options.delogoMode ?? 'any'} onValueChange={(v) => onChange({ ...options, delogoMode: v === 'any' ? undefined : (v as DelogoMode) })}>
+              <SelectTrigger size="sm" className="w-32" aria-label="Delogo 处理方式">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">每个区域自选</SelectItem>
+                <SelectItem value="delogo">固定插值修补</SelectItem>
+                <SelectItem value="blur">固定模糊</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
     </details>
@@ -91,7 +122,7 @@ export function ReviewerDemo() {
   const [initialKeymap] = useState(loadKeymap)
   const [bvid, setBvid] = useState(DEFAULT_BVID)
   const [bili, setBili] = useState<BiliState>({ kind: 'loading', bvid: DEFAULT_BVID })
-  const [features, setFeatures] = useState<ReviewFeatures>(featurePresets.full)
+  const [options, setOptions] = useState<DemoOptions>({ features: featurePresets.full, embedded: false, readOnly: false, disabled: false })
 
 
   const onLoaded = (video: ReviewVideo) => {
@@ -132,11 +163,15 @@ export function ReviewerDemo() {
         {bili.kind === 'error' && <span className="min-w-0 flex-1 text-destructive">{bili.message}</span>}
       </form>
 
-      <FeatureToggles value={features} onChange={setFeatures} />
+      <FeatureToggles options={options} onChange={setOptions} />
 
       <VideoReviewer
         ref={reviewer}
-        features={features}
+        features={options.features}
+        embedded={options.embedded}
+        readOnly={options.readOnly}
+        disabled={options.disabled}
+        delogoMode={options.delogoMode}
         videos={videos}
         tagOptions={tagOptions}
         generateTitles={generateTitles}
@@ -152,8 +187,13 @@ export function ReviewerDemo() {
       />
       <details className="rounded-lg border bg-card text-xs">
         <summary className="cursor-pointer px-3 py-2 text-muted-foreground select-none">
-          宿主收到的数据：onChange {changes} 次{lastTask ? `，最近一次 onSave 来自「${lastTask.title}」` : '，按 Enter 保存后显示 onSave 的任务'}
+          宿主收到的数据：onChange {changes} 次{lastTask ? `，最近一次任务来自「${lastTask.title}」` : '，按 Enter 保存后显示 onSave 的任务'}
         </summary>
+        <div className="border-t px-3 py-2">
+          <Button size="xs" variant="outline" onClick={() => setLastTask(reviewer.current?.getTask() ?? null)}>
+            调用 ref.getTask()（不保存）
+          </Button>
+        </div>
         {lastTask && <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-[11px] leading-4 tabular-nums">{JSON.stringify(lastTask, null, 2)}</pre>}
       </details>
     </div>
