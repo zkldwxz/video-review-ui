@@ -135,6 +135,21 @@ export function DelogoPanel() {
 
   return (
     <div className="flex flex-col gap-2">
+      {!readOnly && (
+        <div className={cn('grid gap-2', features.modelImport && 'grid-cols-2')}>
+          <Button variant="outline" onClick={newDelogo}>
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={1.5} data-icon="inline-start" />
+            新建区域
+            <Kbd className="ml-auto">N</Kbd>
+          </Button>
+          {features.modelImport && (
+            <Button variant="outline" onClick={openImport}>
+              <HugeiconsIcon icon={AiScanIcon} strokeWidth={1.5} data-icon="inline-start" />
+              导入模型结果
+            </Button>
+          )}
+        </div>
+      )}
       {edits.delogos.length === 0 && (
         <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
           {readOnly ? '没有 Delogo 区域。' : <>还没有 Delogo 区域。按 <Kbd>N</Kbd> 新建{features.modelImport && '，或导入模型识别结果'}。</>}
@@ -146,11 +161,12 @@ export function DelogoPanel() {
         const update = (patch: Partial<Omit<DelogoRegion, 'id'>>, key?: string) => dispatch({ type: 'updateDelogo', id: d.id, patch }, key)
         return (
           <div key={d.id} className={cn('rounded-lg border transition-colors duration-120 ease-snap', selected ? 'border-mark-delogo-fg/50 bg-mark-delogo/8' : 'hover:bg-muted/60')}>
+            <div className="flex h-9 items-center">
             <button
               type="button"
               onClick={() => setSelection(selected ? null : { kind: 'delogo', id: d.id })}
               aria-expanded={selected}
-              className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className={cn('flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg pl-2.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40', selected && !readOnly ? 'pr-1.5' : 'pr-2.5')}
             >
               <span className={cn('size-2 shrink-0 rounded-[2px]', active ? 'bg-mark-delogo' : 'border border-mark-delogo-fg')} />
               <span className="font-medium">Delogo {i + 1}</span>
@@ -161,6 +177,23 @@ export function DelogoPanel() {
                 </span>
               )}
             </button>
+            {/* 删除放在标题行：展开后底部没有其他操作时不会单独占一行 */}
+            {selected && !readOnly && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`删除 Delogo ${i + 1}`}
+                title="删除"
+                className="mr-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  dispatch({ type: 'removeDelogo', id: d.id })
+                  notify(`已删除 Delogo ${i + 1}`, { action: { label: '撤销', onClick: undo } })
+                }}
+              >
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} />
+              </Button>
+            )}
+            </div>
             {selected && (
               <div className="flex animate-in flex-col gap-3 border-t px-2.5 pt-2.5 pb-3 duration-150 ease-snap fade-in slide-in-from-top-1">
                 <fieldset disabled={readOnly} className="contents">
@@ -206,10 +239,10 @@ export function DelogoPanel() {
                     {d.origin.trackId && `，跟踪 ID ${d.origin.trackId}`}
                   </p>
                 )}
-                {!readOnly && (
-                <div className="flex justify-end gap-2">
+                {!readOnly && (timed || features.batchSync) && (
+                <div className="flex items-center gap-2">
                   {timed && (
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => update({ start: 0, end: media.duration })}>
+                    <Button variant="outline" size="sm" onClick={() => update({ start: 0, end: media.duration })}>
                       整段生效
                     </Button>
                   )}
@@ -225,16 +258,9 @@ export function DelogoPanel() {
                     }}
                   >
                     <HugeiconsIcon icon={ApplyToBatchIcon} strokeWidth={1.5} data-icon="inline-start" />
-                    同步 {sameResolution.length}
+                    同步到 {sameResolution.length} 个
                   </Button>
                   )}
-                  <Button variant="destructive" size="sm" onClick={() => {
-                      dispatch({ type: 'removeDelogo', id: d.id })
-                      notify(`已删除 Delogo ${i + 1}`, { action: { label: '撤销', onClick: undo } })
-                    }}>
-                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} data-icon="inline-start" />
-                    删除
-                  </Button>
                 </div>
                 )}
               </div>
@@ -242,21 +268,6 @@ export function DelogoPanel() {
           </div>
         )
       })}
-      {!readOnly && (
-      <div className={cn('grid gap-2 pt-1', features.modelImport && 'grid-cols-2')}>
-        <Button variant="outline" onClick={newDelogo}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={1.5} data-icon="inline-start" />
-          新建区域
-          <Kbd className="ml-auto">N</Kbd>
-        </Button>
-        {features.modelImport && (
-          <Button variant="outline" onClick={openImport}>
-            <HugeiconsIcon icon={AiScanIcon} strokeWidth={1.5} data-icon="inline-start" />
-            导入模型结果
-          </Button>
-        )}
-      </div>
-      )}
     </div>
   )
 }

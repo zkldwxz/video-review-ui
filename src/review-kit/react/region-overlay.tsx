@@ -65,7 +65,7 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
   const cropSelected = selection?.kind === 'crop'
 
   return (
-    <div ref={ref} className={cn('pointer-events-none absolute inset-0', className)}>
+    <div ref={ref} className={cn('@container/frame pointer-events-none absolute inset-0', className)}>
       {crop && (
         <>
           <svg className="absolute inset-0 size-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
@@ -117,11 +117,11 @@ export function RegionOverlay({ width, height, time, crop, delogos, selection, s
             >
               Delogo {i + 1}
               {showTimes && (
-                <span className="tabular-nums opacity-75">
+                <span className={cn('tabular-nums opacity-75', !selected && 'hidden @min-[30rem]/frame:inline')}>
                   {formatShort(d.start)}–{formatShort(d.end)}
                 </span>
               )}
-              {d.origin && <span className="opacity-75">{modelLabel(d.origin)}</span>}
+              {d.origin && <span className={cn('opacity-75', !selected && 'hidden @min-[30rem]/frame:inline')}>{modelLabel(d.origin)}</span>}
             </MarkLabel>
             {selected && apply && <Handles onDown={(e, h) => beginDrag(e, d, h, undefined, apply)} />}
           </div>

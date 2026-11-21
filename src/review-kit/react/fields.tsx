@@ -10,12 +10,13 @@ import { formatTimecode, parseTimecode } from '../core/timecode'
 import type { ReviewStatus } from '../core/types'
 import { statusMeta } from './labels'
 
-export function StatusBadge({ status }: { status: ReviewStatus }) {
+/** labelClassName 用来在窄处只留圆点，例如 'sr-only @min-[15rem]/queue:not-sr-only' */
+export function StatusBadge({ status, labelClassName }: { status: ReviewStatus; labelClassName?: string }) {
   const { label, dot } = statusMeta[status]
   return (
-    <Badge variant="outline" className="gap-1.5 font-normal">
+    <Badge variant="outline" className="gap-1.5 font-normal" title={label}>
       <span className={cn('size-1.5 rounded-full', dot)} />
-      {label}
+      <span className={labelClassName}>{label}</span>
     </Badge>
   )
 }
@@ -110,7 +111,7 @@ export function InlineTitle({ value, onCommit, className }: { value: string; onC
         autoFocus
         defaultValue={value}
         aria-label="视频标题"
-        className={cn('font-semibold', className)}
+        className={cn('text-sm font-semibold md:text-sm', className)}
         onFocus={(e) => e.currentTarget.select()}
         onKeyDown={(e) => commitKeys(e, () => (e.currentTarget.value = value))}
         onBlur={(e) => {

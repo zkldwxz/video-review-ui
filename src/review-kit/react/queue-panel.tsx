@@ -34,7 +34,7 @@ type Props = {
 
 export function QueuePanel({ videos, total, doneCount, editsOf, activeId, onSelect, query, onQueryChange, filter, onFilterChange }: Props) {
   return (
-    <aside className="flex min-h-0 flex-col border-r">
+    <aside className="@container/queue flex min-h-0 flex-col border-r">
       <div className="flex flex-col gap-2 p-3">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">视频队列</h2>
@@ -116,7 +116,7 @@ function QueueItem({ video, edits, active, onSelect }: { video: ReviewVideo; edi
         )}
       </span>
 
-      <StatusBadge status={edits.status} />
+      <StatusBadge status={edits.status} labelClassName="sr-only @min-[15rem]/queue:not-sr-only" />
     </button>
   )
 }

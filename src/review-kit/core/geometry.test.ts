@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitAspect, moveRect, resizeRect } from './geometry'
+import { fitAspect, moveRect, resizeRect, suggestRegion } from './geometry'
 
 const close = (r: { x: number; y: number; w: number; h: number }) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Math.round(v * 1000) / 1000]))
 
@@ -36,5 +36,27 @@ describe('moveRect / fitAspect', () => {
 
   it('改比例时保持中心，不超过原框', () => {
     expect(close(fitAspect({ x: 0, y: 0, w: 1, h: 1 }, 2))).toEqual({ x: 0, y: 0.25, w: 1, h: 0.5 })
+  })
+})
+
+describe('suggestRegion', () => {
+  it('没有区域时放在右上角，横屏是 2.5:1 的横条', () => {
+    expect(close(suggestRegion([], 16 / 9, 0.05))).toEqual({ x: 0.81, y: 0.05, w: 0.14, h: 0.1 })
+  })
+
+  it('竖屏按像素也是横条，不会变成方块', () => {
+    const r = suggestRegion([], 9 / 16)
+    expect(close(r)).toMatchObject({ w: 0.249, h: 0.056 })
+    expect((r.w * 1080) / (r.h * 1920)).toBeCloseTo(2.5)
+  })
+
+  it('右上角已有台标时换到左上角', () => {
+    const logo = { x: 0.83, y: 0.06, w: 0.11, h: 0.07 }
+    expect(close(suggestRegion([logo], 16 / 9, 0.05))).toMatchObject({ x: 0.05, y: 0.05 })
+  })
+
+  it('四角都占了放到中间', () => {
+    const all = [{ x: 0, y: 0, w: 1, h: 0.3 }, { x: 0, y: 0.7, w: 1, h: 0.3 }]
+    expect(close(suggestRegion(all, 16 / 9, 0.05))).toEqual({ x: 0.43, y: 0.45, w: 0.14, h: 0.1 })
   })
 })
