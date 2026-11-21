@@ -76,3 +76,22 @@ export function fitAspect(r: Rect, aspect: number): Rect {
   const cy = r.y + r.h / 2
   return { x: clamp(cx - w / 2, 0, 1 - w), y: clamp(cy - h / 2, 0, 1 - h), w, h }
 }
+
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+/**
+ * 新建 Delogo 区域放在哪：台标和水印多在四角，依次试右上、左上、右下、左下，
+ * 取第一个不和已有区域重叠的角；四角都占了再放到画面中间。
+ * aspect 是画面像素宽高比。框按像素取 2.5:1 的横条、宽为长边的 14%，竖屏也不会变成方块。
+ */
+export function suggestRegion(existing: Rect[], aspect = 16 / 9, margin = 0.03): Rect {
+  const w = 0.14 * Math.max(1, 1 / aspect)
+  const h = (w * aspect) / 2.5
+  const corners: Rect[] = [
+    { x: 1 - margin - w, y: margin, w, h },
+    { x: margin, y: margin, w, h },
+    { x: 1 - margin - w, y: 1 - margin - h, w, h },
+    { x: margin, y: 1 - margin - h, w, h },
+  ]
+  return corners.find((c) => !existing.some((r) => overlaps(c, r))) ?? { x: (1 - w) / 2, y: (1 - h) / 2, w, h }
+}

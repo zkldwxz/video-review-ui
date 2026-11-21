@@ -27,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DelogoIcon, MarkInIcon, MarkOutIcon, SplitAtPlayheadIcon } from '@/components/icons/review-icons'
 import { cn } from '@/lib/utils'
 import { applyFeatures, isActionEnabled, resolveFeatures, type ReviewFeatures } from '../core/features'
+import { suggestRegion } from '../core/geometry'
 import { createId } from '../core/id'
 import { defaultKeymap, type Keymap, type ShortcutAction } from '../core/shortcuts'
 import { buildTask, type ReviewTask } from '../core/task'
@@ -234,7 +235,7 @@ function ReviewerBody({
 
 
   const newDelogo = () => {
-    const region: DelogoRegion = { id: createId('d'), x: 0.4, y: 0.44, w: 0.2, h: 0.12, start: 0, end: media.duration, mode: delogoMode ?? 'delogo' }
+    const region: DelogoRegion = { id: createId('d'), ...suggestRegion(edits.delogos, media.width / media.height), start: 0, end: media.duration, mode: delogoMode ?? 'delogo' }
     dispatch({ type: 'addDelogo', region })
     select({ kind: 'delogo', id: region.id })
   }
@@ -413,14 +414,17 @@ function ReviewerBody({
         ref={rootRef}
         inert={disabled}
         aria-disabled={disabled || undefined}
-        className={cn(
-          'grid min-h-0 overflow-hidden bg-card',
-          !embedded && 'rounded-xl border',
-          f.queue ? 'grid-cols-[280px_minmax(0,1fr)_340px]' : 'grid-cols-[minmax(0,1fr)_340px]',
-          disabled && 'opacity-60',
-          className,
-        )}
+        className={cn('@container/reviewer flex min-h-0 overflow-hidden bg-card', !embedded && 'rounded-xl border', disabled && 'opacity-60', className)}
       >
+        {/* 两侧栏随组件宽度收窄，给画面留出空间 */}
+        <div
+          className={cn(
+            'grid min-h-0 min-w-0 flex-1',
+            f.queue
+              ? 'grid-cols-[200px_minmax(0,1fr)_280px] @min-[60rem]/reviewer:grid-cols-[232px_minmax(0,1fr)_300px] @min-[78rem]/reviewer:grid-cols-[280px_minmax(0,1fr)_340px]'
+              : 'grid-cols-[minmax(0,1fr)_280px] @min-[60rem]/reviewer:grid-cols-[minmax(0,1fr)_300px] @min-[78rem]/reviewer:grid-cols-[minmax(0,1fr)_340px]',
+          )}
+        >
         {f.queue && (
         <QueuePanel
           videos={queue}
@@ -439,7 +443,7 @@ function ReviewerBody({
         />
         )}
 
-        <section className="flex min-h-0 min-w-0 flex-col">
+        <section className="@container/center flex min-h-0 min-w-0 flex-col">
           <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3">
             <div className="flex min-w-0 flex-col">
               {f.rename && !locked ? (
@@ -489,17 +493,21 @@ function ReviewerBody({
             <ToastViewport toasts={toasts} onDismiss={dismiss} className="absolute inset-x-0 bottom-3 z-20" />
           </div>
 
-          <div className="flex h-11 shrink-0 items-center gap-1 border-y px-3">
+          {/* 窄时先收起总时长、缩小时间码；再不够，编辑工具和倍速整组换到第二行，按钮不会被裁掉或压到旁边 */}
+          <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-1 border-y px-3 py-1.5">
+            <div className="flex items-center gap-1">
             <IconAction icon={PreviousIcon} label="上一帧" combo={keymap.frameBack[0]} onClick={() => frame(-1)} />
             <Button size="icon" aria-label={ps.playing ? '暂停' : '播放'} onClick={player.togglePlay} {...keepFocus}>
               <HugeiconsIcon icon={ps.playing ? PauseIcon : PlayIcon} strokeWidth={1.75} />
             </Button>
             <IconAction icon={NextIcon} label="下一帧" combo={keymap.frameForward[0]} onClick={() => frame(1)} />
             <div className="ml-2 flex shrink-0 items-baseline gap-1.5 whitespace-nowrap tabular-nums">
-              <span className="text-xl leading-none font-medium">{formatTimecode(ps.time, media.fps)}</span>
-              <span className="text-xs text-muted-foreground">/ {formatTimecode(media.duration, media.fps)}</span>
+              <span className="text-base leading-none font-medium @min-[34rem]/center:text-xl">{formatTimecode(ps.time, media.fps)}</span>
+              <span className="hidden text-xs text-muted-foreground @min-[34rem]/center:inline">/ {formatTimecode(media.duration, media.fps)}</span>
             </div>
-            {(enabled('markIn') || enabled('newDelogo') || canImport) && <Separator orientation="vertical" className="mx-2 h-5!" />}
+            </div>
+            <div className="flex flex-1 items-center gap-1">
+            {(enabled('markIn') || enabled('newDelogo') || canImport) && <Separator orientation="vertical" className="mx-2 hidden h-5! @min-[40rem]/center:block" />}
             {enabled('markIn') && (
               <>
                 <IconAction icon={MarkInIcon} label={f.segments ? '设为入点' : '设为 Delogo 开始'} combo={keymap.markIn[0]} onClick={() => mark('start')} />
@@ -511,6 +519,7 @@ function ReviewerBody({
             {canImport && <IconAction icon={AiScanIcon} label="导入模型结果" onClick={() => setImportOpen(true)} />}
             <div className="ml-auto flex items-center gap-1">
               <SpeedMenu rate={ps.rate} onChange={player.setRate} combos={[keymap.speedDown[0], keymap.speedUp[0]]} />
+            </div>
             </div>
           </div>
 
@@ -575,6 +584,7 @@ function ReviewerBody({
           </>
           )}
         </aside>
+        </div>
       </div>
 
       <ImportDialog
